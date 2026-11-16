@@ -1,0 +1,291 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:SonicScript.App"
+        x:Class="SonicScript.App.Views.SettingsWindow"
+        x:Name="Root"
+        x:CompileBindings="False"
+        Width="860" Height="680" MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://SonicScript/Assets/icon.png"
+        Title="{l:Tr settings.title}">
+  <Window.Resources>
+    <DataTemplate x:Key="EnumText">
+      <TextBlock Text="{Binding Converter={x:Static l:EnumTextConverter.Instance}}" />
+    </DataTemplate>
+  </Window.Resources>
+  <Window.Styles>
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="ScrollViewer > StackPanel">
+      <Setter Property="Margin" Value="16,8,24,16" />
+      <Setter Property="Spacing" Value="6" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Padding="16,10" BorderThickness="0,1,0,0" BorderBrush="#33808080">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+          <Button x:Name="CancelButton" Content="{l:Tr common.cancel}" IsCancel="True" MinWidth="100" />
+          <Button x:Name="SaveButton" Content="{l:Tr common.save}" IsDefault="True" MinWidth="100" Classes="accent" />
+        </StackPanel>
+        <TextBlock x:Name="SaveError" Classes="error" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <TabControl x:Name="Tabs" TabStripPlacement="Left" Padding="0">
+
+      <!-- Allgemein -->
+      <TabItem x:Name="TabGeneral" Header="{l:Tr settings.tab.general}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.ui_language}" />
+            <ComboBox x:Name="UiLanguage" MinWidth="220" />
+            <TextBlock Classes="hint" Text="{l:Tr common.restart_needed}" />
+            <CheckBox IsChecked="{Binding Autostart}" Content="{l:Tr settings.autostart}" Margin="0,12,0,0" />
+            <CheckBox IsChecked="{Binding CheckForUpdates}" Content="{l:Tr settings.updates}" />
+            <CheckBox IsChecked="{Binding ShowRecordingIndicator}" Content="{l:Tr settings.indicator}" />
+            <TextBlock x:Name="About" Classes="hint" Margin="0,16,0,0" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Diktat & Tasten -->
+      <TabItem x:Name="TabDictation" Header="{l:Tr settings.tab.dictation}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.dictate}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Width="220" Text="{Binding DictateHotkey, Converter={x:Static l:KeyComboConverter.Instance}}" />
+              <ComboBox Width="180" ItemsSource="{x:Static l:Choices.TriggerModes}" SelectedItem="{Binding DictateTrigger}" ItemTemplate="{StaticResource EnumText}" />
+            </StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.hint}" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.default_mode}" />
+            <ComboBox Width="220" ItemsSource="{Binding Modes}" SelectedValue="{Binding DefaultModeId}"
+                      SelectedValueBinding="{Binding Id}" DisplayMemberBinding="{Binding Name}" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.microphone}" />
+            <ComboBox x:Name="Microphone" MinWidth="320" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.insertion}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{l:Tr settings.insertion.method}" VerticalAlignment="Center" Width="120" />
+              <ComboBox Width="260" ItemsSource="{x:Static l:Choices.InsertionMethods}" SelectedItem="{Binding Insertion.Method}" ItemTemplate="{StaticResource EnumText}" />
+            </StackPanel>
+            <CheckBox IsChecked="{Binding Insertion.TypeAsFallback}" Content="{l:Tr settings.insertion.type_fallback}" />
+            <CheckBox IsChecked="{Binding Insertion.RestoreClipboard}" Content="{l:Tr settings.insertion.restore}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{l:Tr settings.insertion.clear_after}" VerticalAlignment="Center" />
+              <NumericUpDown Width="130" Minimum="0" Maximum="3600" Increment="5" FormatString="0" Value="{Binding Insertion.ClearClipboardAfterSeconds}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Spracherkennung -->
+      <TabItem x:Name="TabSpeech" Header="{l:Tr settings.tab.speech}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.speech.engine}" />
+            <ComboBox Width="360" ItemsSource="{x:Static l:Choices.Engines}" SelectedItem="{Binding Transcription.Engine}" ItemTemplate="{StaticResource EnumText}" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.speech.language}" />
+            <ComboBox x:Name="SpeechLanguage" Width="220" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.speech.local_model}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <ComboBox x:Name="LocalModel" Width="360" />
+              <TextBlock x:Name="ModelStatus" VerticalAlignment="Center" Classes="hint" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="DownloadModel" Content="{l:Tr settings.speech.download}" />
+              <Button x:Name="Benchmark" Content="{l:Tr settings.speech.benchmark}" />
+              <ProgressBar x:Name="DownloadProgress" Width="200" Minimum="0" Maximum="1" IsVisible="False" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="BenchmarkResult" Classes="hint" />
+            <CheckBox IsChecked="{Binding Transcription.UseGpu}" Content="{l:Tr settings.speech.gpu}" />
+            <TextBlock Classes="hint" Text="{l:Tr common.restart_needed}" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.speech.cloud}" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.speech.cloud_hint}" />
+            <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,6,0,0">
+              <TextBlock Text="{l:Tr common.provider}" VerticalAlignment="Center" />
+              <ComboBox x:Name="CloudPreset" Grid.Column="1" Width="260" ItemsSource="{x:Static l:Choices.TranscriptionProviders}"
+                        SelectedItem="{Binding Transcription.Cloud.Preset}" ItemTemplate="{StaticResource EnumText}" />
+              <TextBlock Grid.Row="1" Text="{l:Tr common.baseurl}" VerticalAlignment="Center" />
+              <TextBox x:Name="CloudBaseUrl" Grid.Row="1" Grid.Column="1" Margin="0,4" Text="{Binding Transcription.Cloud.BaseUrl}" />
+              <TextBlock Grid.Row="2" Text="{l:Tr common.model}" VerticalAlignment="Center" />
+              <TextBox Grid.Row="2" Grid.Column="1" Margin="0,4" Text="{Binding Transcription.Cloud.Model}" />
+              <TextBlock Grid.Row="3" Text="{l:Tr common.apikey}" VerticalAlignment="Center" />
+              <TextBox x:Name="CloudKey" Grid.Row="3" Grid.Column="1" Margin="0,4" PasswordChar="•" />
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- KI-Modi -->
+      <TabItem x:Name="TabModes" Header="{l:Tr settings.tab.modes}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.modes.provider}" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.modes.provider_hint}" />
+            <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,6,0,0">
+              <TextBlock Text="{l:Tr common.provider}" VerticalAlignment="Center" />
+              <ComboBox x:Name="LmPreset" Grid.Column="1" Width="260" ItemsSource="{x:Static l:Choices.Providers}"
+                        SelectedItem="{Binding LanguageModel.Endpoint.Preset}" ItemTemplate="{StaticResource EnumText}" />
+              <TextBlock Grid.Row="1" Text="{l:Tr common.baseurl}" VerticalAlignment="Center" />
+              <TextBox x:Name="LmBaseUrl" Grid.Row="1" Grid.Column="1" Margin="0,4" Text="{Binding LanguageModel.Endpoint.BaseUrl}" />
+              <TextBlock Grid.Row="2" Text="{l:Tr common.model}" VerticalAlignment="Center" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,4">
+                <TextBox x:Name="LmModel" Width="260" Text="{Binding LanguageModel.Endpoint.Model}" />
+                <ComboBox x:Name="LmModelList" Width="220" IsVisible="False" />
+                <Button x:Name="LmFetch" Content="{l:Tr settings.modes.fetch_models}" />
+              </StackPanel>
+              <TextBlock Grid.Row="3" Text="{l:Tr common.apikey}" VerticalAlignment="Center" />
+              <TextBox x:Name="LmKey" Grid.Row="3" Grid.Column="1" Margin="0,4" PasswordChar="•" />
+            </Grid>
+            <TextBlock x:Name="LmStatus" Classes="hint" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.modes.list}" />
+            <ItemsControl x:Name="ModesList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="#33808080" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+                    <Grid ColumnDefinitions="60,*,170,150" RowDefinitions="Auto,Auto,Auto">
+                      <TextBox Text="{Binding Symbol}" Margin="0,0,6,0" ToolTip.Tip="{l:Tr settings.modes.symbol}" />
+                      <TextBox Grid.Column="1" Text="{Binding Name}" Margin="0,0,6,0" ToolTip.Tip="{l:Tr settings.modes.name}" />
+                      <TextBox Grid.Column="2" Text="{Binding Hotkey, Converter={x:Static l:KeyComboConverter.Instance}}" Margin="0,0,6,0"
+                               Watermark="{l:Tr settings.modes.hotkey}" ToolTip.Tip="{l:Tr settings.modes.hotkey}" />
+                      <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" ItemsSource="{x:Static l:Choices.TriggerModes}"
+                                SelectedItem="{Binding Trigger}" ItemTemplate="{StaticResource EnumText}" />
+                      <TextBox Grid.Row="1" Grid.ColumnSpan="4" Margin="0,6,0,0" Text="{Binding Instruction}" AcceptsReturn="True"
+                               TextWrapping="Wrap" MinHeight="54" Watermark="{l:Tr settings.modes.instruction}"
+                               IsVisible="{Binding NeedsLanguageModel}" />
+                      <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Spacing="8" Margin="0,6,0,0"
+                                  IsVisible="{Binding NeedsLanguageModel}">
+                        <TextBlock Text="{l:Tr settings.modes.temperature}" VerticalAlignment="Center" />
+                        <Slider Width="200" Minimum="0" Maximum="1.2" Value="{Binding Temperature}" />
+                        <Button Content="{l:Tr common.remove}" IsVisible="{Binding !IsBuiltIn}"
+                                Command="{Binding #Root.RemoveModeCommand}" CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button x:Name="AddMode" Content="{l:Tr settings.modes.add}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Apps -->
+      <TabItem x:Name="TabApps" Header="{l:Tr settings.tab.apps}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.apps.hint}" />
+            <Grid ColumnDefinitions="160,180,180,200,Auto" Margin="0,8,0,0">
+              <TextBlock Text="{l:Tr settings.apps.process}" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="1" Text="{l:Tr settings.apps.title}" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="2" Text="{l:Tr settings.apps.mode}" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="3" Text="{l:Tr settings.apps.insertion}" FontWeight="SemiBold" />
+            </Grid>
+            <ItemsControl x:Name="RulesList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="160,180,180,200,Auto" Margin="0,0,0,6">
+                    <TextBox Text="{Binding ProcessName}" Margin="0,0,6,0" />
+                    <TextBox Grid.Column="1" Text="{Binding TitleContains}" Margin="0,0,6,0" />
+                    <ComboBox Grid.Column="2" HorizontalAlignment="Stretch" Margin="0,0,6,0"
+                              ItemsSource="{Binding #Root.DataContext.Modes}" SelectedValue="{Binding ModeId}"
+                              SelectedValueBinding="{Binding Id}" DisplayMemberBinding="{Binding Name}" />
+                    <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" Margin="0,0,6,0"
+                              ItemsSource="{x:Static l:Choices.InsertionMethods}" SelectedItem="{Binding Insertion}"
+                              ItemTemplate="{StaticResource EnumText}" PlaceholderText="{l:Tr settings.apps.insertion.default}" />
+                    <Button Grid.Column="4" Content="✕" Command="{Binding #Root.RemoveRuleCommand}" CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="AddRule" Content="{l:Tr common.add}" />
+              <Button x:Name="AddCurrentApp" Content="{l:Tr settings.apps.current}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Notizen -->
+      <TabItem x:Name="TabNotes" Header="{l:Tr settings.tab.notes}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.notes.hint}" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.folder}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Width="440" Text="{Binding Notes.Folder}" />
+              <Button x:Name="BrowseNotes" Content="{l:Tr common.browse}" />
+            </StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.hotkey}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox Width="220" Text="{Binding Notes.Hotkey, Converter={x:Static l:KeyComboConverter.Instance}}" />
+              <ComboBox Width="180" ItemsSource="{x:Static l:Choices.TriggerModes}" SelectedItem="{Binding Notes.Trigger}" ItemTemplate="{StaticResource EnumText}" />
+            </StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.mode}" />
+            <ComboBox Width="220" ItemsSource="{Binding Modes}" SelectedValue="{Binding Notes.ModeId}"
+                      SelectedValueBinding="{Binding Id}" DisplayMemberBinding="{Binding Name}" />
+            <CheckBox IsChecked="{Binding Notes.CopyToClipboard}" Content="{l:Tr settings.notes.copy}" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.library_hotkey}" />
+            <TextBox Width="220" HorizontalAlignment="Left" Text="{Binding Notes.LibraryHotkey, Converter={x:Static l:KeyComboConverter.Instance}}" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.dock}" />
+            <ComboBox Width="180" ItemsSource="{x:Static l:Choices.DockSides}" SelectedItem="{Binding Notes.LibraryDock}" ItemTemplate="{StaticResource EnumText}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Wörterbuch -->
+      <TabItem x:Name="TabDictionary" Header="{l:Tr settings.tab.dictionary}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="h2" Text="{l:Tr settings.dict.terms}" />
+            <TextBox x:Name="Terms" AcceptsReturn="True" MinHeight="120" TextWrapping="NoWrap" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.dict.replacements}" />
+            <Grid ColumnDefinitions="240,240,Auto">
+              <TextBlock Text="{l:Tr settings.dict.from}" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="1" Text="{l:Tr settings.dict.to}" FontWeight="SemiBold" />
+            </Grid>
+            <ItemsControl x:Name="ReplacementsList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="240,240,Auto" Margin="0,0,0,6">
+                    <TextBox Text="{Binding From}" Margin="0,0,6,0" />
+                    <TextBox Grid.Column="1" Text="{Binding To}" Margin="0,0,6,0" />
+                    <Button Grid.Column="2" Content="✕" Command="{Binding #Root.RemoveReplacementCommand}" CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button x:Name="AddReplacement" Content="{l:Tr common.add}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Verlauf -->
+      <TabItem x:Name="TabHistory" Header="{l:Tr settings.tab.history}">
+        <ScrollViewer>
+          <StackPanel>
+            <CheckBox IsChecked="{Binding History.Enabled}" Content="{l:Tr settings.history.enabled}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{l:Tr settings.history.max}" VerticalAlignment="Center" />
+              <NumericUpDown Width="130" Minimum="0" Maximum="1000" FormatString="0" Value="{Binding History.MaxEntries}" />
+              <TextBlock Text="{l:Tr settings.history.days}" VerticalAlignment="Center" Margin="12,0,0,0" />
+              <NumericUpDown Width="130" Minimum="1" Maximum="365" FormatString="0" Value="{Binding History.MaxAgeDays}" />
+            </StackPanel>
+            <Button x:Name="ClearHistory" Content="{l:Tr settings.history.clear}" Margin="0,4,0,8" />
+            <StackPanel x:Name="HistoryList" Spacing="6" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

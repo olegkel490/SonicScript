@@ -33,6 +33,36 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
 
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(60);
 
+    /// <summary>Verfügbare Modelle über <c>GET {base}/models</c> (Ollama, LM Studio, OpenRouter, OpenAI).</summary>
+    public static async Task<IReadOnlyList<string>> ListModelsAsync(HttpClient http, string baseUrl, string? apiKey, CancellationToken ct)
+    {
+        if (!EndpointPolicy.TryValidate(baseUrl, !string.IsNullOrEmpty(apiKey), out var err))
+            throw new RemoteServiceException(err!);
+        using var req = new HttpRequestMessage(HttpMethod.Get, baseUrl.TrimEnd('/') + "/models");
+        Http.ApplyCommonHeaders(req, string.IsNullOrEmpty(apiKey) ? null : apiKey);
+        var body = await Http.SendAsync(http, req, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        return ParseModelList(body);
+    }
+
+    internal static IReadOnlyList<string> ParseModelList(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array) return [];
+            return data.EnumerateArray()
+                .Select(e => e.TryGetProperty("id", out var id) ? id.GetString() : null)
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Select(id => id!)
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
     public static int MaxTokensFor(string text) => Math.Clamp(text.Length / 2 + 256, 512, 8192);
 
     public async Task<string> CompleteAsync(string systemPrompt, string userMessage, double temperature, CancellationToken ct)

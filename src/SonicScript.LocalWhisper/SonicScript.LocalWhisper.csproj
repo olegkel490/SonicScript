@@ -4,8 +4,12 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Whisper.net" />
-    <PackageReference Include="Whisper.net.Runtime" />
-    <PackageReference Include="Whisper.net.Runtime.Vulkan" />
+    <PackageReference Include="Whisper.net.Runtime" GeneratePathProperty="true" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" GeneratePathProperty="true" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgWhisper_net_Runtime)/build/win-x64/*.dll" LogicalName="whisper-runtime/win-x64/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(PkgWhisper_net_Runtime_Vulkan)/build/win-x64/*.dll" LogicalName="whisper-runtime/vulkan/win-x64/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../SonicScript.Core/SonicScript.Core.csproj" />

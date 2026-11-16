@@ -14,13 +14,13 @@ public static class WavFile
 
         int byteRate = 0;
         Span<byte> chunk = stackalloc byte[8];
+        Span<byte> fmt = stackalloc byte[16];
         while (fs.Read(chunk) == 8)
         {
             var id = chunk[..4];
             var size = BinaryPrimitives.ReadUInt32LittleEndian(chunk[4..]);
             if (id.SequenceEqual("fmt "u8))
             {
-                Span<byte> fmt = stackalloc byte[16];
                 if (size < 16 || fs.Read(fmt) != 16) return null;
                 byteRate = BinaryPrimitives.ReadInt32LittleEndian(fmt[8..12]);
                 fs.Seek(size - 16 + (size & 1), SeekOrigin.Current);

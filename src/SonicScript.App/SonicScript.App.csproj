@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>SonicScript</AssemblyName>
+    <RootNamespace>SonicScript.App</RootNamespace>
+    <ApplicationIcon>Assets\sonicscript.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SonicScript.Core/SonicScript.Core.csproj" />
+    <ProjectReference Include="../SonicScript.LocalWhisper/SonicScript.LocalWhisper.csproj" />
+    <ProjectReference Include="../SonicScript.Platform.Windows/SonicScript.Platform.Windows.csproj" />
+  </ItemGroup>
+</Project>

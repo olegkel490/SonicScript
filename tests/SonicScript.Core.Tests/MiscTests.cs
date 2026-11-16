@@ -130,3 +130,16 @@ public class WavFileTests
         Assert.Null(SonicScript.Core.Audio.WavFile.GetDuration(p));
     }
 }
+
+public class ChatClientTests
+{
+    [Fact]
+    public void ParsesModelList() =>
+        Assert.Equal(["gemma3:4b", "qwen3:4b"],
+            SonicScript.Core.LanguageModel.OpenAiCompatibleChatClient.ParseModelList("""{"object":"list","data":[{"id":"qwen3:4b"},{"id":"gemma3:4b"}]}"""));
+
+    [Fact]
+    public void RejectsKeyOverPlainHttp() =>
+        Assert.Throws<RemoteServiceException>(() =>
+            new SonicScript.Core.LanguageModel.OpenAiCompatibleChatClient(new HttpClient(), "http://example.com/v1", "m", "secret"));
+}

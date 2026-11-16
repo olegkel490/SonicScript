@@ -9,5 +9,6 @@
     <Copyright>Copyright (c) 2026 SonicScript contributors</Copyright>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <WhisperNetVersion>1.9.1</WhisperNetVersion>
   </PropertyGroup>
 </Project>

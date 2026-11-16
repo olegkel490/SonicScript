@@ -1,0 +1,23 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SonicScript.App.Views.RecordingIndicator"
+        SystemDecorations="None" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
+        CanResize="False" SizeToContent="WidthAndHeight"
+        Background="Transparent" TransparencyLevelHint="Transparent"
+        Title="SonicScript">
+  <Border x:Name="Pill" CornerRadius="22" Padding="14,8" Background="#E61E1B2E" BorderBrush="#5538BDF8" BorderThickness="1"
+          Cursor="Hand" ToolTip.Tip="">
+    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+      <Ellipse x:Name="Dot" Width="10" Height="10" Fill="#EF4444" VerticalAlignment="Center" />
+      <TextBlock x:Name="Symbol" Foreground="White" FontSize="15" VerticalAlignment="Center" />
+      <TextBlock x:Name="Label" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+      <StackPanel x:Name="Bars" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center" Height="20">
+        <Rectangle Width="3" Height="4" Fill="#38BDF8" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
+        <Rectangle Width="3" Height="4" Fill="#38BDF8" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
+        <Rectangle Width="3" Height="4" Fill="#38BDF8" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
+        <Rectangle Width="3" Height="4" Fill="#38BDF8" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
+        <Rectangle Width="3" Height="4" Fill="#38BDF8" RadiusX="1.5" RadiusY="1.5" VerticalAlignment="Center" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>
