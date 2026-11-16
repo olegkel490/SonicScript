@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SonicScript.Core/SonicScript.Core.csproj" />
+    <Project Path="src/SonicScript.LocalWhisper/SonicScript.LocalWhisper.csproj" />
+    <Project Path="src/SonicScript.Platform.Windows/SonicScript.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SonicScript.Core.Tests/SonicScript.Core.Tests.csproj" />

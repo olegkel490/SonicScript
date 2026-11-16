@@ -116,3 +116,17 @@ public class UpdateCheckerTests
     public void IgnoresPrereleases() =>
         Assert.Null(UpdateChecker.Parse("""{"tag_name":"v9.0.0","html_url":"","prerelease":true}"""));
 }
+
+public class WavFileTests
+{
+    [Fact]
+    public void WritesAndMeasures()
+    {
+        using var dir = new TempDir();
+        var p = Path.Combine(dir.Path, "n.wav");
+        SonicScript.Core.Audio.WavFile.WriteNoise(p, TimeSpan.FromSeconds(2.5));
+        Assert.Equal(2.5, SonicScript.Core.Audio.WavFile.GetDuration(p)!.Value.TotalSeconds, 3);
+        File.WriteAllText(p, "kein wav");
+        Assert.Null(SonicScript.Core.Audio.WavFile.GetDuration(p));
+    }
+}
