@@ -226,7 +226,17 @@ public sealed class AppController : IDisposable
 
         _recording = session;
         SetTrayState("rec");
-        if (settings.ShowRecordingIndicator) _indicator.ShowRecording(session.Mode, isNote);
+        if (settings.ShowRecordingIndicator) _ = ShowIndicatorDelayedAsync(session);
+    }
+
+    /// <summary>
+    /// Anzeige erst nach der Antipp-Schwelle: Wird z. B. Strg+- nur kurz getippt (= Herauszoomen),
+    /// blitzt keine Aufnahme-Pille auf.
+    /// </summary>
+    private async Task ShowIndicatorDelayedAsync(Session session)
+    {
+        await Task.Delay(HotkeyMatcher.TapThreshold);
+        if (_recording == session) _indicator.ShowRecording(session.Mode, session.IsNote);
     }
 
     private void SwitchMode(HotkeyBinding binding)

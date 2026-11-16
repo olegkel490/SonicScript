@@ -21,6 +21,12 @@ public static class VirtualKeys
     public const int LMenu = 0xA4;
     public const int RMenu = 0xA5;
     public const int F1 = 0x70;
+    public const int OemPlus = 0xBB;
+    public const int OemComma = 0xBC;
+    public const int OemMinus = 0xBD;
+    public const int OemPeriod = 0xBE;
+    public const int Oem2 = 0xBF; // DE: #'
+
 
     /// <summary>Unbelegter VK-Code; wird nach Win-Kombis injiziert, damit das Startmenü nicht aufgeht.</summary>
     public const int MenuMask = 0xE8;
@@ -44,6 +50,11 @@ public static class VirtualKeys
             ["PageUp"] = 0x21, ["PageDown"] = 0x22,
             ["Left"] = 0x25, ["Up"] = 0x26, ["Right"] = 0x27, ["Down"] = 0x28,
             ["Apps"] = 0x5D,
+            // Satzzeichen-Tasten (Position auf deutscher und US-Tastatur gleich)
+            [","] = OemComma, ["Komma"] = OemComma, ["Comma"] = OemComma,
+            ["."] = OemPeriod, ["Punkt"] = OemPeriod, ["Period"] = OemPeriod,
+            ["-"] = OemMinus, ["Minus"] = OemMinus,
+            ["#"] = Oem2, ["Plus"] = OemPlus,
         };
         for (var i = 0; i < 26; i++) d[((char)('A' + i)).ToString()] = 0x41 + i;
         for (var i = 0; i < 10; i++) d[i.ToString()] = 0x30 + i;

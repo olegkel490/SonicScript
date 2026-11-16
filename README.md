@@ -21,18 +21,21 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 
 | Taste (Standard) | Was passiert |
 |---|---|
-| `Ctrl+Win` halten | Diktat. Der Modus kommt aus der App-Regel, sonst wortgetreu |
-| `+Shift` dazu (`Ctrl+Shift+Win`) | **SonicScript+**: sauberer Schrifttext |
-| `+Alt` dazu (`Ctrl+Alt+Win`) | **$%&!**: Frust wird zu einer ruhigen, wirksamen Nachricht |
-| `Alt+Win` halten | **:)**: Text mit passenden Emojis |
-| `Alt+Shift+Win` halten | **EN**: Diktat wird ins Englische übersetzt |
-| `Ctrl+Alt+Space` halten | **Blitznotiz**: wird nicht eingefügt, sondern als Markdown abgelegt |
+| `Strg+,` halten | Diktat. Der Modus kommt aus der App-Regel, sonst wortgetreu |
+| `Strg+.` halten | **SonicScript+**: sauberer Schrifttext |
+| `Strg+-` halten | **EN**: Diktat wird ins Englische übersetzt |
+| `Strg+Shift+.` halten | **$%&!**: Frust wird zu einer ruhigen, wirksamen Nachricht |
+| `Strg+Shift+,` halten | **:)**: Text mit passenden Emojis |
+| `Strg+Shift+-` halten | **Blitznotiz**: wird nicht eingefügt, sondern als Markdown abgelegt |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
 
+**Kurz tippen statt halten** (unter 0,35 s) löst die normale Funktion der Taste aus, z. B. `Strg+-` = Herauszoomen.
+Die Tasten liegen auf deutschen Laptop- und externen Tastaturen an derselben Stelle neben der rechten Shift-Taste.
+
 Jede Taste ist frei belegbar. Pro Taste lässt sich wählen, ob man sie hält oder einmal zum Starten und einmal
-zum Stoppen drückt. Wer während eines Diktats eine Modifikatortaste ergänzt, wechselt den Modus, ohne neu
-anzufangen. Eigene Modi bekommen eine eigene Anweisung und eine eigene Taste, etwa für Übersetzungen oder
+zum Stoppen drückt. Bei Kombinationen nur aus Modifikatoren (z. B. `Ctrl+Win`) wechselt eine zusätzlich gedrückte Modifikatortaste
+den Modus, ohne neu anzufangen. Eigene Modi bekommen eine eigene Anweisung und eine eigene Taste, etwa für Übersetzungen oder
 Antwortentwürfe.
 
 ## Funktionen

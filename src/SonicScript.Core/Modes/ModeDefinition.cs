@@ -50,14 +50,23 @@ public static class BuiltInModes
     [
         new() { Id = VerbatimId, Kind = ModeKind.Verbatim, Name = "SonicScript", Symbol = "◉", Temperature = 0 },
         new() { Id = ImproveId, Kind = ModeKind.Improve, Name = "SonicScript+", Symbol = "✎", Temperature = 0.3,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win | KeyModifiers.Shift, 0) },
+                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemPeriod) },
         new() { Id = CalmId, Kind = ModeKind.Calm, Name = "SonicScript $%&!", Symbol = "☯", Temperature = 0.4,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win | KeyModifiers.Alt, 0) },
+                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemPeriod) },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
-                Hotkey = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Win, 0) },
+                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemComma) },
         new() { Id = TranslateId, Kind = ModeKind.Translate, Name = "SonicScript EN", Symbol = "EN", Temperature = 0.2,
-                Hotkey = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Shift | KeyModifiers.Win, 0) },
+                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemMinus) },
     ];
+
+    /// <summary>Standardtasten bis Schema 1 (für die Migration auf die neuen Tasten).</summary>
+    internal static readonly Dictionary<string, KeyCombo> LegacyHotkeys = new()
+    {
+        [ImproveId] = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win | KeyModifiers.Shift, 0),
+        [CalmId] = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win | KeyModifiers.Alt, 0),
+        [EmojiId] = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Win, 0),
+        [TranslateId] = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Shift | KeyModifiers.Win, 0),
+    };
 
     /// <summary>Fehlende eingebaute Modi ergänzen (z. B. nach manueller Bearbeitung der settings.json).</summary>
     public static void EnsurePresent(IList<ModeDefinition> modes)

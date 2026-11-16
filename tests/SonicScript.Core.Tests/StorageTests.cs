@@ -192,10 +192,10 @@ public class MigrationTests
     {
         using var dir = new TempDir();
         var path = Path.Combine(dir.Path, "settings.json");
-        // Alte Einstellungen ohne Übersetzen-Modus, eigener Modus belegt schon Alt+Shift+Win.
+        // Alte Einstellungen ohne Übersetzen-Modus, eigener Modus belegt schon Strg+-.
         File.WriteAllText(path, """
         { "modes": [ { "id": "verbatim", "kind": "verbatim", "name": "A" },
-                     { "id": "mine", "kind": "custom", "name": "Mein", "hotkey": "Alt+Shift+Win" } ] }
+                     { "id": "mine", "kind": "custom", "name": "Mein", "hotkey": "Ctrl+-" } ] }
         """);
         var s = new SettingsStore(path).Load();
         var translate = s.FindMode(BuiltInModes.TranslateId);
@@ -210,5 +210,42 @@ public class MigrationTests
         var c = new System.Collections.ObjectModel.ObservableCollection<int>([1, 2, 3, 4]);
         Assert.Equal(2, c.RemoveAll(i => i % 2 == 0));
         Assert.Equal([1, 3], c);
+    }
+}
+
+public class HotkeyMigrationTests
+{
+    [Fact]
+    public void OldDefaultsMoveToNewKeys_CustomizedOnesStay()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """
+        {
+          "dictateHotkey": "Ctrl+Win",
+          "notes": { "hotkey": "Ctrl+Alt+Space" },
+          "modes": [
+            { "id": "verbatim", "kind": "verbatim", "name": "A" },
+            { "id": "improve", "kind": "improve", "name": "B", "hotkey": "Ctrl+Shift+Win" },
+            { "id": "calm", "kind": "calm", "name": "C", "hotkey": "F8" },
+            { "id": "emoji", "kind": "emoji", "name": "D", "hotkey": "Alt+Win" },
+            { "id": "translate", "kind": "translate", "name": "E", "hotkey": "Alt+Shift+Win" }
+          ]
+        }
+        """);
+        var store = new SettingsStore(path);
+        var s = store.Load();
+        Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
+        Assert.Equal("Ctrl+Shift+-", s.Notes.Hotkey.ToString());
+        Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
+        Assert.Equal("F8", s.FindMode("calm")!.Hotkey.ToString());          // selbst geändert → bleibt
+        Assert.Equal("Ctrl+Shift+,", s.FindMode("emoji")!.Hotkey.ToString());
+        Assert.Equal("Ctrl+-", s.FindMode("translate")!.Hotkey.ToString());
+        Assert.Equal(AppSettings.CurrentSchema, s.SchemaVersion);
+
+        // Nach der Migration wird nichts mehr umgestellt (z. B. wenn der Nutzer bewusst Ctrl+Win wählt).
+        s.DictateHotkey = KeyCombo.Parse("Ctrl+Win");
+        store.Save(s);
+        Assert.Equal("Ctrl+Win", store.Load().DictateHotkey.ToString());
     }
 }
