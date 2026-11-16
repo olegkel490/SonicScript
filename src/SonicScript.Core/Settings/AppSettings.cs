@@ -7,6 +7,9 @@ namespace SonicScript.Core.Settings;
 
 public sealed class AppSettings
 {
+    public const int CurrentSchema = 2;
+
+    /// <summary>Fehlt in alten Dateien → 1 (Migration in <see cref="Normalize"/>).</summary>
     public int SchemaVersion { get; set; } = 1;
 
     /// <summary>"auto" (Systemsprache), "de" oder "en".</summary>
@@ -22,7 +25,9 @@ public sealed class AppSettings
     public ObservableCollection<ModeDefinition> Modes { get; set; } = new(BuiltInModes.CreateDefaults());
 
     /// <summary>Standard-Diktat: Modus kommt aus <see cref="AppRules"/>, sonst <see cref="DefaultModeId"/>.</summary>
-    public KeyCombo DictateHotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Win, 0);
+    public KeyCombo DictateHotkey { get; set; } = DefaultDictateHotkey;
+
+    public static readonly KeyCombo DefaultDictateHotkey = new(KeyModifiers.Ctrl, VirtualKeys.OemComma);
     public TriggerMode DictateTrigger { get; set; } = TriggerMode.Hold;
     public string DefaultModeId { get; set; } = BuiltInModes.VerbatimId;
     public ObservableCollection<AppRule> AppRules { get; set; } = [];
@@ -31,6 +36,31 @@ public sealed class AppSettings
     public NotesSettings Notes { get; set; } = new();
     public DictionarySettings Dictionary { get; set; } = new();
     public HistorySettings History { get; set; } = new();
+
+    /// <summary>
+    /// Schema 1 → 2: Standardtasten von Ctrl/Alt/Shift+Win auf Strg + , . - umstellen. Nur Tasten, die der Nutzer
+    /// nicht selbst geändert hat, und nur wenn die neue Taste nicht schon anderweitig belegt ist.
+    /// </summary>
+    private void MigrateHotkeys()
+    {
+        if (SchemaVersion >= CurrentSchema) return;
+        var defaults = BuiltInModes.CreateDefaults();
+        bool Taken(KeyCombo c) => c == DictateHotkey || c == Notes.Hotkey || c == Notes.LibraryHotkey || Modes.Any(m => m.Hotkey == c);
+
+        var oldDictate = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win, 0);
+        if (DictateHotkey == oldDictate && !Taken(DefaultDictateHotkey)) DictateHotkey = DefaultDictateHotkey;
+
+        var oldNote = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.Space);
+        if (Notes.Hotkey == oldNote && !Taken(NotesSettings.DefaultHotkey)) Notes.Hotkey = NotesSettings.DefaultHotkey;
+
+        foreach (var m in Modes)
+        {
+            if (!BuiltInModes.LegacyHotkeys.TryGetValue(m.Id, out var legacy) || m.Hotkey != legacy) continue;
+            var target = defaults.First(d => d.Id == m.Id).Hotkey;
+            if (!Taken(target)) m.Hotkey = target;
+        }
+        SchemaVersion = CurrentSchema;
+    }
 
     public ModeDefinition? FindMode(string? id) => id is null ? null : Modes.FirstOrDefault(m => m.Id == id);
 
@@ -59,6 +89,7 @@ public sealed class AppSettings
         Dictionary.Terms ??= [];
         Dictionary.Replacements ??= [];
 
+        MigrateHotkeys();
         BuiltInModes.EnsurePresent(Modes);
         if (FindMode(DefaultModeId) is null) DefaultModeId = BuiltInModes.VerbatimId;
         if (FindMode(Notes.ModeId) is null) Notes.ModeId = BuiltInModes.VerbatimId;
@@ -186,7 +217,9 @@ public sealed class AppRule
 public sealed class NotesSettings
 {
     public string Folder { get; set; } = "";
-    public KeyCombo Hotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.Space);
+    public static readonly KeyCombo DefaultHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemMinus);
+
+    public KeyCombo Hotkey { get; set; } = DefaultHotkey;
     public TriggerMode Trigger { get; set; } = TriggerMode.Hold;
     public string ModeId { get; set; } = BuiltInModes.VerbatimId;
     public KeyCombo LibraryHotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'L');

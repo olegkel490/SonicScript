@@ -99,9 +99,46 @@ public class HotkeyMatcherTests
         Assert.True(down.Swallow);
         Assert.Same(Note, down.Event?.Binding);
         Assert.True(m.OnKey(Space, true).Swallow); // Auto-Repeat
+        _time.Advance(TimeSpan.FromSeconds(2));
         var up = m.OnKey(Space, false);
         Assert.True(up.Swallow);
         Assert.Equal(HotkeyEventKind.Stop, up.Event?.Kind);
+        Assert.Null(up.Replay);
+    }
+
+    [Fact]
+    public void ShortTapOfMainKeyCombo_CancelsAndReplaysOriginalShortcut()
+    {
+        var zoom = new HotkeyBinding("en", KeyCombo.Parse("Ctrl+-"), TriggerMode.Hold, HotkeyAction.Dictate, "translate");
+        var m = new HotkeyMatcher([zoom], time: _time);
+        m.OnKey(LControl, true);
+        Assert.True(m.OnKey(OemMinus, true).Swallow);
+        _time.Advance(TimeSpan.FromMilliseconds(100));
+        var up = m.OnKey(OemMinus, false);
+        Assert.True(up.Swallow);                         // Original-Up wurde verschluckt …
+        Assert.Equal(HotkeyEventKind.Cancel, up.Event?.Kind);
+        Assert.Equal(KeyCombo.Parse("Ctrl+-"), up.Replay); // … und die ganze Kombi wird nachgereicht.
+    }
+
+    [Fact]
+    public void ShortTap_ReleasingCtrlFirst_AlsoReplays()
+    {
+        var b = new HotkeyBinding("d", KeyCombo.Parse("Ctrl+,"), TriggerMode.Hold, HotkeyAction.Dictate);
+        var m = new HotkeyMatcher([b], time: _time);
+        m.OnKey(LControl, true);
+        m.OnKey(OemComma, true);
+        var ctrlUp = m.OnKey(LControl, false);
+        Assert.Equal(KeyCombo.Parse("Ctrl+,"), ctrlUp.Replay);
+        Assert.True(m.OnKey(OemComma, false).Swallow);   // späteres Up der Komma-Taste bleibt verschluckt
+    }
+
+    [Fact]
+    public void ModifierOnlyCombos_NeverReplay()
+    {
+        var m = Create();
+        m.OnKey(LControl, true);
+        m.OnKey(LWin, true);
+        Assert.Null(m.OnKey(LWin, false).Replay);
     }
 
     [Fact]

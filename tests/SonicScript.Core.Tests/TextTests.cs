@@ -145,7 +145,7 @@ public class TranslateModeTests
     {
         Assert.Equal(ModeKind.Translate, Translate.Kind);
         Assert.True(Translate.IsBuiltIn);
-        Assert.Equal("Alt+Shift+Win", Translate.Hotkey.ToString());
+        Assert.Equal("Ctrl+-", Translate.Hotkey.ToString());
     }
 
     [Theory]

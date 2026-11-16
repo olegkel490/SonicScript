@@ -73,7 +73,7 @@ public static partial class Strings
 
         // Diktat
         ["settings.hotkey.dictate"] = "Diktieren (Modus je nach App)",
-        ["settings.hotkey.hint"] = "Format: Ctrl+Win, Ctrl+Alt+Space, F9 … Modifikatoren allein brauchen mindestens zwei Tasten. Esc bricht ab.",
+        ["settings.hotkey.hint"] = "Format: Ctrl+, · Ctrl+. · Ctrl+- · Ctrl+Win · F9 … Halten = diktieren, kurz tippen = normale Funktion der Taste. Modifikatoren allein brauchen mindestens zwei Tasten. Esc bricht ab.",
         ["settings.trigger"] = "Auslösen",
         ["settings.default_mode"] = "Standard-Modus",
         ["settings.microphone"] = "Mikrofon",
@@ -271,7 +271,7 @@ public static partial class Strings
         ["settings.about"] = "Version {0}. Local speech recognition with Whisper. No telemetry.",
 
         ["settings.hotkey.dictate"] = "Dictate (mode depends on app)",
-        ["settings.hotkey.hint"] = "Format: Ctrl+Win, Ctrl+Alt+Space, F9 … Modifier-only combos need at least two keys. Esc cancels.",
+        ["settings.hotkey.hint"] = "Format: Ctrl+, · Ctrl+. · Ctrl+- · Ctrl+Win · F9 … Hold = dictate, short tap = the key's normal function. Modifier-only combos need at least two keys. Esc cancels.",
         ["settings.trigger"] = "Trigger",
         ["settings.default_mode"] = "Default mode",
         ["settings.microphone"] = "Microphone",

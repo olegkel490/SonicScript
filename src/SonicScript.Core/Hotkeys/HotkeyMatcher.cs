@@ -32,7 +32,11 @@ public enum HotkeyEventKind
 
 public readonly record struct HotkeyEvent(HotkeyEventKind Kind, HotkeyBinding? Binding);
 
-public readonly record struct KeyResult(bool Swallow, HotkeyEvent? Event, bool InjectMenuMask)
+/// <param name="Replay">
+/// Kurz angetippte Halten-Kombi mit Haupttaste (z. B. Strg+-): Aufnahme verworfen, die Kombination soll
+/// an die Ziel-App nachgereicht werden, damit deren normale Funktion (z. B. Herauszoomen) erhalten bleibt.
+/// </param>
+public readonly record struct KeyResult(bool Swallow, HotkeyEvent? Event, bool InjectMenuMask, KeyCombo? Replay = null)
 {
     public static readonly KeyResult PassThrough = new(false, null, false);
 }
@@ -46,6 +50,9 @@ public sealed class HotkeyMatcher
 {
     /// <summary>Andere Taste innerhalb dieser Zeit nach Start einer Nur-Modifikator-Kombi = Nutzer wollte ein Systemkürzel.</summary>
     public static readonly TimeSpan ShortcutGrace = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>Kürzer gehaltene Kombis mit Haupttaste gelten als normales Tippen (Antippen = Originalfunktion).</summary>
+    public static readonly TimeSpan TapThreshold = TimeSpan.FromMilliseconds(350);
 
     private readonly IReadOnlyList<HotkeyBinding> _bindings;
     private readonly int _cancelKey;
@@ -165,11 +172,20 @@ public sealed class HotkeyMatcher
         _held.Remove(vk);
         var swallow = _swallowedDowns.Remove(vk);
         HotkeyEvent? ev = null;
+        KeyCombo? replay = null;
 
         if (ActiveBinding is { Trigger: TriggerMode.Hold } active && IsPartOf(active.Combo, vk))
         {
             ActiveBinding = null;
-            ev = new HotkeyEvent(HotkeyEventKind.Stop, active);
+            if (!active.Combo.IsModifierOnly && _time.GetElapsedTime(_sessionStart) < TapThreshold)
+            {
+                ev = new HotkeyEvent(HotkeyEventKind.Cancel, active);
+                replay = active.Combo;
+            }
+            else
+            {
+                ev = new HotkeyEvent(HotkeyEventKind.Stop, active);
+            }
         }
 
         var injectMask = false;
@@ -179,7 +195,7 @@ public sealed class HotkeyMatcher
             _winConsumed = false;
         }
 
-        return new KeyResult(swallow, ev, injectMask);
+        return new KeyResult(swallow, ev, injectMask, replay);
     }
 
     private bool IsPartOf(KeyCombo combo, int vk)

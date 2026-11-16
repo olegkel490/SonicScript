@@ -47,3 +47,32 @@ public class KeyComboTests
         Assert.DoesNotContain(conflicts, c => c.BindingId == "d");
     }
 }
+
+public class PunctuationKeyTests
+{
+    [Theory]
+    [InlineData("Ctrl+,", 0xBC)]
+    [InlineData("Ctrl+.", 0xBE)]
+    [InlineData("Ctrl+-", 0xBD)]
+    [InlineData("Strg+Shift+Komma", 0xBC)]
+    [InlineData("Ctrl+#", 0xBF)]
+    public void ParsesPunctuation(string text, int vk)
+    {
+        Assert.True(KeyCombo.TryParse(text, out var c));
+        Assert.Equal(vk, c.Key);
+        Assert.Equal(c, KeyCombo.Parse(c.ToString()));
+    }
+
+    [Fact]
+    public void DefaultsUseCtrlCommaPeriodMinus()
+    {
+        var s = new SonicScript.Core.Settings.AppSettings();
+        Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
+        Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
+        Assert.Equal("Ctrl+-", s.FindMode("translate")!.Hotkey.ToString());
+        Assert.Equal("Ctrl+Shift+.", s.FindMode("calm")!.Hotkey.ToString());
+        Assert.Equal("Ctrl+Shift+,", s.FindMode("emoji")!.Hotkey.ToString());
+        Assert.Equal("Ctrl+Shift+-", s.Notes.Hotkey.ToString());
+        Assert.Empty(HotkeyConflicts.Find(s.BuildHotkeyBindings()));
+    }
+}

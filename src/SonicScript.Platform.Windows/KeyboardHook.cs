@@ -54,6 +54,7 @@ public sealed class KeyboardHook : IDisposable
                             // Verhindert, dass das Loslassen von Win das Startmenü öffnet.
                             Send(Key(VirtualKeys.MenuMask, false), Key(VirtualKeys.MenuMask, true));
                         }
+                        if (result.Replay is { } combo) Replay(combo);
                         if (result.Event is { } ev) HotkeyTriggered?.Invoke(ev);
                         if (result.Swallow) return 1;
                     }
@@ -65,6 +66,32 @@ public sealed class KeyboardHook : IDisposable
             }
         }
         return CallNextHookEx(_hook, nCode, wParam, lParam);
+    }
+
+    /// <summary>
+    /// Kombination an die Ziel-App nachreichen (kurz angetippt = normale Funktion). Bereits losgelassene
+    /// Modifikatoren werden für die Dauer des Tastendrucks kurz mitgedrückt. Injizierte Tasten ignoriert der Hook.
+    /// </summary>
+    private static void Replay(KeyCombo combo)
+    {
+        var mods = new List<ushort>();
+        void Need(KeyModifiers flag, int generic, int left)
+        {
+            if (combo.Modifiers.HasFlag(flag) && (GetAsyncKeyState(generic) & 0x8000) == 0) mods.Add((ushort)left);
+        }
+        Need(KeyModifiers.Ctrl, VirtualKeys.Control, VirtualKeys.LControl);
+        Need(KeyModifiers.Shift, VirtualKeys.Shift, VirtualKeys.LShift);
+        Need(KeyModifiers.Alt, VirtualKeys.Menu, VirtualKeys.LMenu);
+        if (combo.Modifiers.HasFlag(KeyModifiers.Win) &&
+            (GetAsyncKeyState(VirtualKeys.LWin) & 0x8000) == 0 && (GetAsyncKeyState(VirtualKeys.RWin) & 0x8000) == 0)
+            mods.Add(VirtualKeys.LWin);
+
+        var inputs = new List<INPUT>();
+        inputs.AddRange(mods.Select(m => Key(m, false)));
+        inputs.Add(Key((ushort)combo.Key, false));
+        inputs.Add(Key((ushort)combo.Key, true));
+        inputs.AddRange(mods.AsEnumerable().Reverse().Select(m => Key(m, true)));
+        Send([.. inputs]);
     }
 
     public void Dispose()
