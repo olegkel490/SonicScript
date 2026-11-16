@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using SonicScript.App.Services;
+using SonicScript.Core;
 using SonicScript.Core.Hotkeys;
 using SonicScript.Core.LanguageModel;
 using SonicScript.Core.Localization;
@@ -27,9 +28,9 @@ public sealed partial class SettingsWindow : Window
     {
         _app = app;
         _s = app?.CloneSettings() ?? new AppSettings();
-        RemoveModeCommand = new RelayCommand<ModeDefinition>(m => { _s.Modes.Remove(m); RefreshLists(); });
-        RemoveRuleCommand = new RelayCommand<AppRule>(r => { _s.AppRules.Remove(r); RefreshLists(); });
-        RemoveReplacementCommand = new RelayCommand<Replacement>(r => { _s.Dictionary.Replacements.Remove(r); RefreshLists(); });
+        RemoveModeCommand = new RelayCommand<ModeDefinition>(m => _s.Modes.Remove(m));
+        RemoveRuleCommand = new RelayCommand<AppRule>(r => _s.AppRules.Remove(r));
+        RemoveReplacementCommand = new RelayCommand<Replacement>(r => _s.Dictionary.Replacements.Remove(r));
         AvaloniaXamlLoader.Load(this);
         DataContext = _s;
         if (app is null) return; // Designer
@@ -204,7 +205,6 @@ public sealed partial class SettingsWindow : Window
         Get<Button>("AddMode").Click += (_, _) =>
         {
             _s.Modes.Add(new ModeDefinition { Kind = ModeKind.Custom, Name = Strings.Get("settings.modes.new_name"), Symbol = "✦" });
-            RefreshLists();
         };
     }
 
@@ -213,7 +213,7 @@ public sealed partial class SettingsWindow : Window
     private void SetupLists()
     {
         Get<TextBox>("Terms").Text = string.Join(Environment.NewLine, _s.Dictionary.Terms);
-        Get<Button>("AddRule").Click += (_, _) => { _s.AppRules.Add(new AppRule()); RefreshLists(); };
+        Get<Button>("AddRule").Click += (_, _) => _s.AppRules.Add(new AppRule());
         Get<Button>("AddCurrentApp").Click += async (_, _) =>
         {
             await Task.Delay(TimeSpan.FromSeconds(3));
@@ -221,11 +221,10 @@ public sealed partial class SettingsWindow : Window
             if (!string.IsNullOrEmpty(fg.App.ProcessName) && !fg.App.ProcessName.Equals("SonicScript", StringComparison.OrdinalIgnoreCase))
             {
                 _s.AppRules.Add(new AppRule { ProcessName = fg.App.ProcessName, ModeId = _s.DefaultModeId });
-                RefreshLists();
             }
             Activate();
         };
-        Get<Button>("AddReplacement").Click += (_, _) => { _s.Dictionary.Replacements.Add(new Replacement()); RefreshLists(); };
+        Get<Button>("AddReplacement").Click += (_, _) => _s.Dictionary.Replacements.Add(new Replacement());
         Get<Button>("BrowseNotes").Click += async (_, _) =>
         {
             var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false });
@@ -237,21 +236,16 @@ public sealed partial class SettingsWindow : Window
             }
         };
         Get<Button>("ClearHistory").Click += (_, _) => { _app.History.Clear(); RenderHistory(); };
-        RefreshLists();
+        BindLists();
         RenderHistory();
     }
 
-    private void RefreshLists()
+    /// <summary>Die Listen sind ObservableCollections – Hinzufügen/Entfernen aktualisiert die Ansicht selbst.</summary>
+    private void BindLists()
     {
-        void Reset(string name, object source)
-        {
-            var c = Get<ItemsControl>(name);
-            c.ItemsSource = null;
-            c.ItemsSource = (System.Collections.IEnumerable)source;
-        }
-        Reset("ModesList", _s.Modes);
-        Reset("RulesList", _s.AppRules);
-        Reset("ReplacementsList", _s.Dictionary.Replacements);
+        Get<ItemsControl>("ModesList").ItemsSource = _s.Modes;
+        Get<ItemsControl>("RulesList").ItemsSource = _s.AppRules;
+        Get<ItemsControl>("ReplacementsList").ItemsSource = _s.Dictionary.Replacements;
     }
 
     private void RenderHistory()

@@ -135,3 +135,33 @@ public class PromptBuilderTests
     public void UserMessageWrapsTranscript() =>
         Assert.Equal("<transcript>\nHi\n</transcript>", PromptBuilder.BuildUserMessage("Hi"));
 }
+
+public class TranslateModeTests
+{
+    private static ModeDefinition Translate => BuiltInModes.CreateDefaults().First(m => m.Id == BuiltInModes.TranslateId);
+
+    [Fact]
+    public void IsBuiltInWithItsOwnHotkey()
+    {
+        Assert.Equal(ModeKind.Translate, Translate.Kind);
+        Assert.True(Translate.IsBuiltIn);
+        Assert.Equal("Alt+Shift+Win", Translate.Hotkey.ToString());
+    }
+
+    [Theory]
+    [InlineData("de", "Übersetze den Text ins Englische")]
+    [InlineData("en", "Translate the text into English")]
+    public void PromptAsksForEnglish(string lang, string expected)
+    {
+        var p = PromptBuilder.BuildSystemPrompt(Translate, lang, []);
+        Assert.Contains(expected, p);
+    }
+
+    [Fact]
+    public void OtherLanguagesAreNotToldToKeepTheirLanguage() =>
+        Assert.DoesNotContain("Keep the language", PromptBuilder.BuildSystemPrompt(Translate, "fr", []));
+
+    [Fact]
+    public void ICantIsAValidTranslation() =>
+        Assert.Equal(RewriteVerdict.Ok, RewriteGuard.Check("Das kann ich leider nicht machen", "I can't do that, unfortunately.", ModeKind.Translate));
+}

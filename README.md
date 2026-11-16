@@ -25,6 +25,7 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `+Shift` dazu (`Ctrl+Shift+Win`) | **SonicScript+**: sauberer Schrifttext |
 | `+Alt` dazu (`Ctrl+Alt+Win`) | **$%&!**: Frust wird zu einer ruhigen, wirksamen Nachricht |
 | `Alt+Win` halten | **:)**: Text mit passenden Emojis |
+| `Alt+Shift+Win` halten | **EN**: Diktat wird ins Englische übersetzt |
 | `Ctrl+Alt+Space` halten | **Blitznotiz**: wird nicht eingefügt, sondern als Markdown abgelegt |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
@@ -132,6 +133,6 @@ tests/SonicScript.Core.Tests      xUnit-Tests für den Kern
 
 SonicScript is a push-to-talk dictation tray app for Windows. Hold a key, speak, release, and the text appears
 at your cursor. Speech recognition runs locally with Whisper (CPU or Vulkan GPU). The AI rewrite modes use
-Ollama on the same PC by default, with OpenRouter as an option. There are per-app modes, quick voice notes
+Ollama on the same PC by default, with OpenRouter as an option. A built-in mode translates dictation into English. There are per-app modes, quick voice notes
 filed as daily Markdown, a dictionary and clipboard restore. The UI is available in German and English.
 MIT licensed.

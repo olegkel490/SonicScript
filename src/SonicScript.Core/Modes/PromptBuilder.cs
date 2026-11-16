@@ -35,7 +35,7 @@ public static class PromptBuilder
             sb.AppendLine();
         }
 
-        if (!de && !string.IsNullOrEmpty(language) && language != "en" && language != "auto")
+        if (mode.Kind != ModeKind.Translate && !de && !string.IsNullOrEmpty(language) && language != "en" && language != "auto")
             sb.AppendLine("Keep the language of the transcript.");
 
         sb.Append(de
@@ -55,6 +55,9 @@ public static class PromptBuilder
         ModeKind.Emoji => de
             ? "Korrigiere den Text leicht (Rechtschreibung, Zeichensetzung, Füllwörter) und ergänze passende Emojis – sparsam, etwa eines pro Satz, an sinnvollen Stellen. Wortlaut und Sprache bleiben sonst gleich."
             : "Lightly correct the text (spelling, punctuation, filler words) and add fitting emojis – sparingly, about one per sentence, where they make sense. Otherwise keep wording and language.",
+        ModeKind.Translate => de
+            ? "Übersetze den Text ins Englische: natürlich und idiomatisch, im Tonfall und in der Förmlichkeit des Sprechers. Füllwörter, Versprecher und Wiederholungen fallen weg, Selbstkorrekturen werden übernommen. Namen, Zahlen, Daten und Fachbegriffe bleiben korrekt. Ist der Text schon Englisch, glätte ihn nur."
+            : "Translate the text into English: natural and idiomatic, matching the speaker's tone and formality. Drop filler words, slips and repetitions, apply self-corrections. Keep names, numbers, dates and technical terms correct. If the text is already English, just polish it.",
         ModeKind.Custom => de ? "Bearbeite den Text sinnvoll." : "Edit the text sensibly.",
         _ => "",
     };

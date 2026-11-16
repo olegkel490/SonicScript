@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using SonicScript.Core.Hotkeys;
 using SonicScript.Core.Modes;
@@ -18,13 +19,13 @@ public sealed class AppSettings
 
     public TranscriptionSettings Transcription { get; set; } = new();
     public LanguageModelSettings LanguageModel { get; set; } = new();
-    public List<ModeDefinition> Modes { get; set; } = BuiltInModes.CreateDefaults();
+    public ObservableCollection<ModeDefinition> Modes { get; set; } = new(BuiltInModes.CreateDefaults());
 
     /// <summary>Standard-Diktat: Modus kommt aus <see cref="AppRules"/>, sonst <see cref="DefaultModeId"/>.</summary>
     public KeyCombo DictateHotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Win, 0);
     public TriggerMode DictateTrigger { get; set; } = TriggerMode.Hold;
     public string DefaultModeId { get; set; } = BuiltInModes.VerbatimId;
-    public List<AppRule> AppRules { get; set; } = [];
+    public ObservableCollection<AppRule> AppRules { get; set; } = [];
 
     public InsertionSettings Insertion { get; set; } = new();
     public NotesSettings Notes { get; set; } = new();
@@ -49,7 +50,7 @@ public sealed class AppSettings
     {
         Transcription ??= new();
         LanguageModel ??= new();
-        Modes ??= BuiltInModes.CreateDefaults();
+        Modes ??= new(BuiltInModes.CreateDefaults());
         AppRules ??= [];
         Insertion ??= new();
         Notes ??= new();
@@ -204,7 +205,7 @@ public sealed class DictionarySettings
     /// <summary>Namen/Fachbegriffe in gewünschter Schreibweise; gehen als Hinweis an Whisper und das Sprachmodell.</summary>
     public List<string> Terms { get; set; } = [];
 
-    public List<Replacement> Replacements { get; set; } = [];
+    public ObservableCollection<Replacement> Replacements { get; set; } = [];
 }
 
 public sealed class Replacement

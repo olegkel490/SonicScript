@@ -45,7 +45,8 @@ public static partial class RewriteGuard
     {
         if (string.IsNullOrWhiteSpace(cleanedOutput)) return RewriteVerdict.Empty;
         if (kind != ModeKind.Custom && cleanedOutput.Length > input.Length * 3 + 300) return RewriteVerdict.TooLong;
-        if (kind != ModeKind.Custom && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
+        // Bei Übersetzungen ist "I can't …" oft eine korrekte Übersetzung, keine Verweigerung.
+        if (kind is not (ModeKind.Custom or ModeKind.Translate) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
             return RewriteVerdict.LooksLikeAnswer;
         return RewriteVerdict.Ok;
     }
