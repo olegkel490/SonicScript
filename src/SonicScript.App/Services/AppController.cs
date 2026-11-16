@@ -16,6 +16,7 @@ using SonicScript.Core.Pipeline;
 using SonicScript.Core.Rules;
 using SonicScript.Core.Settings;
 using SonicScript.Core.Storage;
+using SonicScript.Core.Text;
 using SonicScript.Core.Transcription;
 using SonicScript.Core.Updates;
 using SonicScript.LocalWhisper;
@@ -37,6 +38,11 @@ public sealed class AppController : IDisposable
         public required HotkeyBinding Binding { get; set; }
         public required ModeDefinition Mode { get; set; }
         public required bool IsNote { get; init; }
+        public required bool IsEdit { get; init; }
+        /// <summary>Text vor dem Cursor / Auswahl / Passwortfeld – wird beim Start im Hintergrund gelesen.</summary>
+        public required Task<FocusContext?> Context { get; init; }
+        /// <summary>Länger als die Antipp-Schwelle gehalten → echte Aufnahme (Ton, Ducking, Anzeige).</summary>
+        public bool Confirmed { get; set; }
         public required ForegroundInfo Target { get; init; }
         public required string AudioPath { get; init; }
         public required AppSettings Settings { get; init; }
@@ -49,6 +55,7 @@ public sealed class AppController : IDisposable
     private readonly AudioRecorder _recorder = new();
     private readonly TextInserter _inserter = new();
     private readonly RecordingIndicator _indicator = new();
+    private readonly AudioDucker _ducker = new();
     private TrayIcon? _tray;
 
     private ITranscriber? _transcriber;
@@ -108,6 +115,7 @@ public sealed class AppController : IDisposable
         _indicator.Clicked += () => _ = StopAsync();
         _recorder.Level += level => Dispatcher.UIThread.Post(() => _indicator.SetLevel(level));
         _hook.HotkeyTriggered += ev => Dispatcher.UIThread.Post(() => OnHotkey(ev));
+        Controls.HotkeyCapture.ActiveChanged += active => _hook.Suspended = active;
         _hook.Matcher = new HotkeyMatcher(Settings.BuildHotkeyBindings());
         try
         {
@@ -123,6 +131,9 @@ public sealed class AppController : IDisposable
         CreateTray();
         Log.Info("Tray created");
         PreloadTranscriber();
+
+        if (Program.AfterUpdate)
+            Toast.Show(Strings.Format("toast.updated", CurrentVersion.ToString(3)));
 
         if (!Settings.FirstRunCompleted)
         {
@@ -172,6 +183,7 @@ public sealed class AppController : IDisposable
     private ModeDefinition ResolveMode(HotkeyBinding binding, ForegroundInfo target, AppSettings s)
     {
         if (binding.Action == HotkeyAction.Note) return s.FindMode(s.Notes.ModeId) ?? s.DefaultMode;
+        if (binding.Action == HotkeyAction.EditSelection) return DictationPipeline.EditMode;
         if (binding.ModeId is not null && s.FindMode(binding.ModeId) is { } m) return m;
         return s.FindMode(AppRuleResolver.ResolveModeId(s, target.App)) ?? s.DefaultMode;
     }
@@ -207,6 +219,8 @@ public sealed class AppController : IDisposable
             Binding = binding,
             Mode = ResolveMode(binding, target, settings),
             IsNote = isNote,
+            IsEdit = binding.Action == HotkeyAction.EditSelection,
+            Context = FocusContextReader.CaptureAsync(TimeSpan.FromMilliseconds(600)),
             Target = target,
             AudioPath = Path.Combine(AppPaths.Recordings, $"rec-{Guid.NewGuid():N}.wav"),
             Settings = settings,
@@ -226,17 +240,30 @@ public sealed class AppController : IDisposable
 
         _recording = session;
         SetTrayState("rec");
-        if (settings.ShowRecordingIndicator) _ = ShowIndicatorDelayedAsync(session);
+        _ = ConfirmRecordingAsync(session);
     }
 
     /// <summary>
-    /// Anzeige erst nach der Antipp-Schwelle: Wird z. B. Strg+- nur kurz getippt (= Herauszoomen),
-    /// blitzt keine Aufnahme-Pille auf.
+    /// Anzeige, Ton und Ducking erst nach der Antipp-Schwelle: Wird z. B. Strg+- nur kurz getippt (= Herauszoomen),
+    /// passiert nichts Sichtbares oder Hörbares.
     /// </summary>
-    private async Task ShowIndicatorDelayedAsync(Session session)
+    private async Task ConfirmRecordingAsync(Session session)
     {
         await Task.Delay(HotkeyMatcher.TapThreshold);
-        if (_recording == session) _indicator.ShowRecording(session.Mode, session.IsNote);
+        if (_recording != session) return;
+        session.Confirmed = true;
+        var s = session.Settings;
+        if (s.PlaySounds) Sounds.Play(Cue.Start);
+        if (s.DuckOtherAudio) _ducker.Duck(s.DuckLevelPercent);
+        if (s.ShowRecordingIndicator) _indicator.ShowRecording(session.Mode, session.IsNote);
+    }
+
+    /// <summary>Ende der Aufnahme: Ducking aufheben, ggf. Ton.</summary>
+    private void EndRecordingFeedback(Session session, Cue cue)
+    {
+        if (!session.Confirmed) return;
+        if (session.Settings.DuckOtherAudio) _ducker.Restore();
+        if (session.Settings.PlaySounds) Sounds.Play(cue);
     }
 
     private void SwitchMode(HotkeyBinding binding)
@@ -249,10 +276,11 @@ public sealed class AppController : IDisposable
 
     private async Task CancelAsync()
     {
-        if (_recording is not null)
+        if (_recording is { } rec)
         {
             _recording = null;
             _hook.Matcher?.EndSession();
+            EndRecordingFeedback(rec, Cue.Cancel);
             await _recorder.CancelAsync();
             ResetUi();
         }
@@ -267,6 +295,7 @@ public sealed class AppController : IDisposable
         if (_recording is not { } s) return;
         _recording = null;
         _hook.Matcher?.EndSession();
+        EndRecordingFeedback(s, Cue.Stop);
 
         string? path;
         try
@@ -297,8 +326,16 @@ public sealed class AppController : IDisposable
         {
             var transcriber = EnsureTranscriber() ?? throw new InvalidOperationException("no_transcriber");
             var pipeline = new DictationPipeline(transcriber, CreateChatClient(s.Settings));
-            var result = await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token));
-            await DeliverAsync(s, result);
+            var context = await s.Context;
+            if (s.IsEdit)
+            {
+                await EditSelectionAsync(s, pipeline, path, context);
+            }
+            else
+            {
+                var result = await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token));
+                await DeliverAsync(s, result, context);
+            }
         }
         catch (OperationCanceledException)
         {
@@ -309,6 +346,7 @@ public sealed class AppController : IDisposable
             Log.Error("Transcription", ex.InnerException);
             Pending.Keep(path, s.Mode.Id, ex.Message);
             keep = true;
+            if (s.Settings.PlaySounds) Sounds.Play(Cue.Error);
             Toast.Show(Strings.Format("toast.transcription_failed", Short(ex.Message)), isError: true);
             RebuildTrayMenu();
         }
@@ -325,7 +363,34 @@ public sealed class AppController : IDisposable
         }
     }
 
-    private async Task DeliverAsync(Session s, DictationResult result)
+    /// <summary>"Auswahl bearbeiten": Markierung holen, Anweisung anwenden, Ergebnis ersetzt die Markierung.</summary>
+    private async Task EditSelectionAsync(Session s, DictationPipeline pipeline, string audioPath, FocusContext? context)
+    {
+        var selected = context?.SelectedText;
+        if (string.IsNullOrEmpty(selected) && ForegroundWindow.Current == s.Target.Handle)
+            selected = await TextInserter.CopySelectionAsync();
+        if (string.IsNullOrEmpty(selected))
+        {
+            Toast.Show(Strings.Get("toast.no_selection"), isError: true);
+            return;
+        }
+
+        var result = await Task.Run(() => pipeline.RunEditAsync(audioPath, selected, s.Settings, s.Cts.Token));
+        if (result.IsEmpty)
+        {
+            ShowWarning(result);
+            if (result.Warning == DictationWarning.None) Toast.Show(Strings.Get("toast.nothing_heard"));
+            return;
+        }
+
+        // Die Markierung ist noch aktiv → Einfügen ersetzt sie.
+        var method = AppRuleResolver.ResolveInsertion(s.Settings, s.Target.App);
+        if (method == InsertionMethod.Type) method = InsertionMethod.Paste;
+        ReportOutcome(await _inserter.InsertAsync(result.Final, method, s.Target, s.Settings.Insertion), method);
+        Remember(s, result with { Verbatim = selected });
+    }
+
+    private async Task DeliverAsync(Session s, DictationResult result, FocusContext? context)
     {
         if (result.IsEmpty)
         {
@@ -343,24 +408,36 @@ public sealed class AppController : IDisposable
         else
         {
             var method = AppRuleResolver.ResolveInsertion(s.Settings, s.Target.App);
-            var outcome = await _inserter.InsertAsync(result.Final, method, s.Target, s.Settings.Insertion);
-            switch (outcome)
-            {
-                case InsertOutcome.ClipboardOnly when method != InsertionMethod.ClipboardOnly:
-                    Toast.Show(Strings.Get("toast.clipboard_only"));
-                    break;
-                case InsertOutcome.ClipboardOnly:
-                    Toast.Show(Strings.Get("toast.copied"));
-                    break;
-                case InsertOutcome.Blocked:
-                    Toast.Show(Strings.Get("toast.blocked"), isError: true);
-                    break;
-                case InsertOutcome.Failed:
-                    Toast.Show(Strings.Get("toast.insert_failed"), isError: true);
-                    break;
-            }
+            var target = context?.IsPassword == true ? s.Target with { IsPasswordField = true } : s.Target;
+            var text = s.Settings.Insertion.FitToContext ? InsertionFitter.Fit(result.Final, context?.TextBefore) : result.Final;
+            ReportOutcome(await _inserter.InsertAsync(text, method, target, s.Settings.Insertion), method);
         }
 
+        ShowWarning(result);
+        Remember(s, result);
+    }
+
+    private static void ReportOutcome(InsertOutcome outcome, InsertionMethod method)
+    {
+        switch (outcome)
+        {
+            case InsertOutcome.ClipboardOnly when method != InsertionMethod.ClipboardOnly:
+                Toast.Show(Strings.Get("toast.clipboard_only"));
+                break;
+            case InsertOutcome.ClipboardOnly:
+                Toast.Show(Strings.Get("toast.copied"));
+                break;
+            case InsertOutcome.Blocked:
+                Toast.Show(Strings.Get("toast.blocked"), isError: true);
+                break;
+            case InsertOutcome.Failed:
+                Toast.Show(Strings.Get("toast.insert_failed"), isError: true);
+                break;
+        }
+    }
+
+    private static void ShowWarning(DictationResult result)
+    {
         switch (result.Warning)
         {
             case DictationWarning.ModeFailed:
@@ -373,7 +450,10 @@ public sealed class AppController : IDisposable
                 Toast.Show(Strings.Get("toast.mode_not_configured"), isError: true);
                 break;
         }
+    }
 
+    private void Remember(Session s, DictationResult result)
+    {
         _last = result;
         if (s.Settings.History.Enabled)
         {
@@ -610,10 +690,14 @@ public sealed class AppController : IDisposable
 
         menu.Add(new NativeMenuItemSeparator());
 
+        var history = new NativeMenuItem(Strings.Get("tray.history"));
+        history.Click += (_, _) => OpenSettings("history");
+        menu.Add(history);
+
         if (_update is { } upd)
         {
             var update = new NativeMenuItem(Strings.Format("tray.update", upd.Tag));
-            update.Click += (_, _) => OpenUrl(upd.HtmlUrl);
+            update.Click += async (_, _) => await InstallUpdateAsync(upd);
             menu.Add(update);
         }
 
@@ -671,12 +755,51 @@ public sealed class AppController : IDisposable
             if (_update is not null)
             {
                 RebuildTrayMenu();
-                Toast.Show(Strings.Format("tray.update", _update.Tag));
+                Toast.Show(Strings.Format("toast.update_available", _update.Tag));
             }
         }
         catch (Exception ex)
         {
             Log.Error("Update check", ex);
+        }
+    }
+
+    private bool _updating;
+
+    /// <summary>Neue Version laden, Prüfsumme checken, .exe austauschen und neu starten.</summary>
+    private async Task InstallUpdateAsync(ReleaseInfo release)
+    {
+        if (_updating) return;
+        _updating = true;
+        try
+        {
+            Toast.Show(Strings.Format("update.downloading", release.Tag));
+            var result = await new Updater(Http).InstallAsync(release, CancellationToken.None);
+            switch (result)
+            {
+                case UpdateResult.Ready:
+                    _lifetime.Shutdown();
+                    break;
+                case UpdateResult.NoWriteAccess:
+                    Toast.Show(Strings.Get("update.no_write"), isError: true);
+                    OpenUrl(release.HtmlUrl);
+                    break;
+                case UpdateResult.ChecksumMismatch:
+                    Toast.Show(Strings.Get("update.checksum"), isError: true);
+                    break;
+                default:
+                    OpenUrl(release.HtmlUrl);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update", ex);
+            Toast.Show(Strings.Format("update.failed", Short(ex.Message)), isError: true);
+        }
+        finally
+        {
+            _updating = false;
         }
     }
 

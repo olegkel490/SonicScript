@@ -63,7 +63,17 @@ public static class VirtualKeys
         return d;
     }
 
-    public static bool TryParse(string name, out int vk) => ByName.TryGetValue(name.Trim(), out vk);
+    public static bool TryParse(string name, out int vk)
+    {
+        var n = name.Trim();
+        if (ByName.TryGetValue(n, out vk)) return true;
+        // Sonstige Tasten als Hex-Code ("0xBA"), wie Name() sie ausgibt.
+        if (n.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(n[2..], System.Globalization.NumberStyles.HexNumber, null, out vk) && vk is > 0 and < 0xFF && !IsModifier(vk))
+            return true;
+        vk = 0;
+        return false;
+    }
 
     public static string Name(int vk) => ByCode.TryGetValue(vk, out var n) ? n : $"0x{vk:X2}";
 

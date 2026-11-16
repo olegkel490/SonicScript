@@ -16,6 +16,8 @@ public enum HotkeyAction
     Note,
     /// <summary>Notiz-Bibliothek ein-/ausblenden.</summary>
     ToggleLibrary,
+    /// <summary>Markierten Text per gesprochener Anweisung bearbeiten.</summary>
+    EditSelection,
 }
 
 public sealed record HotkeyBinding(string Id, KeyCombo Combo, TriggerMode Trigger, HotkeyAction Action, string? ModeId = null);

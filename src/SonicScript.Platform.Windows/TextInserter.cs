@@ -54,6 +54,30 @@ public sealed class TextInserter
         return InsertOutcome.Inserted;
     }
 
+    /// <summary>
+    /// Markierten Text per Strg+C holen (Fallback, wenn UI Automation nichts liefert). Die Zwischenablage wird danach
+    /// wiederhergestellt. null = nichts markiert oder Kopieren nicht möglich.
+    /// </summary>
+    public static async Task<string?> CopySelectionAsync()
+    {
+        if (!await WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true)) return null;
+        var snapshot = ClipboardService.Capture();
+        var before = ClipboardService.SequenceNumber;
+        if (Send(Key(VK_CONTROL, false), Key(VK_C, false), Key(VK_C, true), Key(VK_CONTROL, true)) == 0) return null;
+
+        string? text = null;
+        for (var i = 0; i < 20; i++)
+        {
+            await Task.Delay(25).ConfigureAwait(true);
+            if (ClipboardService.SequenceNumber == before) continue;
+            text = ClipboardService.GetText();
+            break;
+        }
+        if (snapshot.IsEmpty) ClipboardService.Clear();
+        else ClipboardService.Restore(snapshot);
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
     private static async Task<InsertOutcome> ClipboardOnlyAsync(string text, InsertionSettings settings)
     {
         if (!await ClipboardService.SetTextAsync(text).ConfigureAwait(true)) return InsertOutcome.Failed;
@@ -129,6 +153,7 @@ public sealed class TextInserter
     private const ushort VK_CONTROL = 0x11;
     private const ushort VK_SHIFT = 0x10;
     private const ushort VK_V = 0x56;
+    private const ushort VK_C = 0x43;
     private const ushort VK_RETURN = 0x0D;
     private const ushort VK_TAB = 0x09;
 }

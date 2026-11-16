@@ -34,7 +34,8 @@ public static partial class RewriteGuard
         var t = ThinkBlock().Replace(output ?? "", "").Trim();
         var fence = CodeFence().Match(t);
         if (fence.Success) t = fence.Groups[1].Value.Trim();
-        t = t.Replace(PromptBuilder.TranscriptOpen, "").Replace(PromptBuilder.TranscriptClose, "").Trim();
+        t = t.Replace(PromptBuilder.TranscriptOpen, "").Replace(PromptBuilder.TranscriptClose, "")
+             .Replace(PromptBuilder.TextOpen, "").Replace(PromptBuilder.TextClose, "").Trim();
         t = Preamble().Replace(t, "").Trim();
         if (t.Length >= 2 && ((t[0] == '"' && t[^1] == '"') || (t[0] == '„' && t[^1] == '“') || (t[0] == '«' && t[^1] == '»')))
             t = t[1..^1].Trim();

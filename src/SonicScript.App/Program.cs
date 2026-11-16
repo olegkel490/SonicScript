@@ -12,7 +12,12 @@ internal static class Program
     {
         // Nur eine Instanz. Ein zweiter Start (z. B. Doppelklick, während SonicScript schon im Tray läuft)
         // bittet die laufende Instanz, ihr Fenster zu zeigen, statt still zu verschwinden.
-        using var mutex = new Mutex(initiallyOwned: true, MutexName, out var isFirst);
+        using var mutex = new Mutex(initiallyOwned: false, MutexName);
+        // Nach einem Update läuft die alte Instanz evtl. noch kurz – bis zu 20 s auf sie warten.
+        var afterUpdate = args.Contains(Services.Updater.AfterUpdateArg);
+        bool isFirst;
+        try { isFirst = mutex.WaitOne(afterUpdate ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
+        catch (AbandonedMutexException) { isFirst = true; }
         if (!isFirst)
         {
             try
@@ -25,6 +30,7 @@ internal static class Program
         }
 
         AppPaths.EnsureCreated();
+        if (afterUpdate) Services.Updater.CleanupOldVersion();
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Error("Unhandled", e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) => { Log.Error("Unobserved task", e.Exception); e.SetObserved(); };
 
@@ -35,11 +41,13 @@ internal static class Program
         }) { IsBackground = true, Name = "SonicScript.Activate" };
         listener.Start();
 
-        StartInBackground = args.Contains("--background");
+        AfterUpdate = afterUpdate;
+        StartInBackground = args.Contains("--background") || afterUpdate;
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
     }
 
     public static bool StartInBackground { get; private set; }
+    public static bool AfterUpdate { get; private set; }
 
     /// <summary>Ein zweiter Start wurde versucht (kommt auf einem Hintergrund-Thread).</summary>
     public static event Action? ActivationRequested;

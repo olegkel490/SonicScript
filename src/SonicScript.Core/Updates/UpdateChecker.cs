@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace SonicScript.Core.Updates;
 
-public sealed record ReleaseInfo(Version Version, string Tag, string HtmlUrl, string? DownloadUrl);
+public sealed record ReleaseInfo(Version Version, string Tag, string HtmlUrl, string? DownloadUrl, string? ChecksumUrl = null);
 
 /// <summary>Prüft die GitHub-Releases auf eine neuere Version. Lädt nichts herunter.</summary>
 public sealed class UpdateChecker(HttpClient http, string repository = "olegkel490/SonicScript")
@@ -27,20 +27,25 @@ public sealed class UpdateChecker(HttpClient http, string repository = "olegkel4
         if (root.TryGetProperty("prerelease", out var p) && p.GetBoolean()) return null;
         var tag = root.GetProperty("tag_name").GetString() ?? "";
         if (!TryParseVersion(tag, out var v)) return null;
-        string? exe = null;
+        string? exe = null, sha = null;
         if (root.TryGetProperty("assets", out var assets))
         {
             foreach (var a in assets.EnumerateArray())
             {
                 var name = a.GetProperty("name").GetString() ?? "";
-                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                {
-                    exe = a.GetProperty("browser_download_url").GetString();
-                    break;
-                }
+                var url = a.GetProperty("browser_download_url").GetString();
+                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) exe ??= url;
+                else if (name.EndsWith(".exe.sha256", StringComparison.OrdinalIgnoreCase)) sha ??= url;
             }
         }
-        return new ReleaseInfo(v, tag, root.GetProperty("html_url").GetString() ?? "", exe);
+        return new ReleaseInfo(v, tag, root.GetProperty("html_url").GetString() ?? "", exe, sha);
+    }
+
+    /// <summary>Liest den Hash aus einer sha256sum-Zeile ("&lt;hex&gt;  SonicScript.exe").</summary>
+    public static string? ParseSha256(string content)
+    {
+        var first = content.Trim().Split((char[])[' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return first is { Length: 64 } && first.All(Uri.IsHexDigit) ? first.ToLowerInvariant() : null;
     }
 
     public static bool TryParseVersion(string tag, out Version version)
