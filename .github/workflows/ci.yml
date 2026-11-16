@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secret hygiene scan
+        shell: bash
+        run: |
+          pattern="$(grep -vE '^[[:space:]]*(#|$)' .github/secret-scan-patterns.txt | paste -sd'|' -)"
+          if grep -RInE --exclude-dir=.git --exclude=secret-scan-patterns.txt "$pattern" .; then
+            echo "Potential secret found."
+            exit 1
+          fi
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore SonicScript.slnx
+
+      - name: Build
+        run: dotnet build SonicScript.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/SonicScript.Core.Tests -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.1.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/SonicScript.App -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false
+          -p:Version=${{ steps.version.outputs.value }} -o dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SonicScript-win-x64
+          path: dist/SonicScript.exe
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: SonicScript-win-x64
+          path: dist
+      - name: Checksum
+        run: cd dist && sha256sum SonicScript.exe > SonicScript.exe.sha256
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SonicScript.exe
+            dist/SonicScript.exe.sha256
+          generate_release_notes: true
