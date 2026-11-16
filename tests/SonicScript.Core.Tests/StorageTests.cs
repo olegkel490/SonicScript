@@ -1,4 +1,5 @@
 using System.Text;
+using SonicScript.Core;
 using SonicScript.Core.Hotkeys;
 using SonicScript.Core.Modes;
 using SonicScript.Core.Notes;
@@ -144,7 +145,7 @@ public class SettingsTests
         using var dir = new TempDir();
         var store = new SettingsStore(Path.Combine(dir.Path, "settings.json"));
         var s = store.Load();
-        Assert.Equal(4, s.Modes.Count);
+        Assert.Equal(5, s.Modes.Count);
 
         s.Modes.RemoveAll(m => m.Id == BuiltInModes.EmojiId);
         s.Modes.Add(new ModeDefinition { Name = "Übersetzen", Instruction = "Ins Englische", Hotkey = KeyCombo.Parse("Ctrl+Alt+T") });
@@ -158,7 +159,7 @@ public class SettingsTests
         Assert.Contains("\"type\"", json);
 
         var loaded = store.Load();
-        Assert.Equal(5, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
+        Assert.Equal(6, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
         Assert.Equal(BuiltInModes.VerbatimId, loaded.DefaultModeId);
         Assert.Equal(1000, loaded.History.MaxEntries);
         Assert.Equal(InsertionMethod.Type, loaded.AppRules[0].Insertion);
@@ -181,5 +182,33 @@ public class SettingsTests
     {
         var conflicts = SonicScript.Core.Hotkeys.HotkeyConflicts.Find(new AppSettings().BuildHotkeyBindings());
         Assert.Empty(conflicts);
+    }
+}
+
+public class MigrationTests
+{
+    [Fact]
+    public void ExistingSettingsGetTranslateModeWithoutHotkeyClash()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        // Alte Einstellungen ohne Übersetzen-Modus, eigener Modus belegt schon Alt+Shift+Win.
+        File.WriteAllText(path, """
+        { "modes": [ { "id": "verbatim", "kind": "verbatim", "name": "A" },
+                     { "id": "mine", "kind": "custom", "name": "Mein", "hotkey": "Alt+Shift+Win" } ] }
+        """);
+        var s = new SettingsStore(path).Load();
+        var translate = s.FindMode(BuiltInModes.TranslateId);
+        Assert.NotNull(translate);
+        Assert.True(translate!.Hotkey.IsEmpty);
+        Assert.Empty(HotkeyConflicts.Find(s.BuildHotkeyBindings()));
+    }
+
+    [Fact]
+    public void RemoveAllWorksOnObservableCollections()
+    {
+        var c = new System.Collections.ObjectModel.ObservableCollection<int>([1, 2, 3, 4]);
+        Assert.Equal(2, c.RemoveAll(i => i % 2 == 0));
+        Assert.Equal([1, 3], c);
     }
 }

@@ -14,6 +14,8 @@ public enum ModeKind
     Emoji,
     /// <summary>Eigener Modus mit eigener Anweisung.</summary>
     Custom,
+    /// <summary>Übersetzung ins Englische.</summary>
+    Translate,
 }
 
 public sealed class ModeDefinition
@@ -42,6 +44,7 @@ public static class BuiltInModes
     public const string ImproveId = "improve";
     public const string CalmId = "calm";
     public const string EmojiId = "emoji";
+    public const string TranslateId = "translate";
 
     public static List<ModeDefinition> CreateDefaults() =>
     [
@@ -52,15 +55,21 @@ public static class BuiltInModes
                 Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Win | KeyModifiers.Alt, 0) },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
                 Hotkey = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Win, 0) },
+        new() { Id = TranslateId, Kind = ModeKind.Translate, Name = "SonicScript EN", Symbol = "EN", Temperature = 0.2,
+                Hotkey = new KeyCombo(KeyModifiers.Alt | KeyModifiers.Shift | KeyModifiers.Win, 0) },
     ];
 
     /// <summary>Fehlende eingebaute Modi ergänzen (z. B. nach manueller Bearbeitung der settings.json).</summary>
-    public static void EnsurePresent(List<ModeDefinition> modes)
+    public static void EnsurePresent(IList<ModeDefinition> modes)
     {
         foreach (var def in CreateDefaults())
         {
             if (!modes.Any(m => m.Id == def.Id))
+            {
+                // Taste nur übernehmen, wenn sie noch frei ist (z. B. neuer eingebauter Modus nach einem Update).
+                if (modes.Any(m => m.Hotkey == def.Hotkey)) def.Hotkey = KeyCombo.None;
                 modes.Insert(Math.Min(modes.Count, CreateDefaults().FindIndex(d => d.Id == def.Id)), def);
+            }
         }
     }
 }
