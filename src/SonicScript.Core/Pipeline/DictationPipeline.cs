@@ -27,6 +27,12 @@ public sealed record DictationResult(
     string? WarningDetail)
 {
     public bool IsEmpty => Final.Length == 0;
+
+    /// <summary>Per Sprachbefehl ("Notiz: …") als Notiz ablegen statt einfügen.</summary>
+    public bool SaveAsNote { get; init; }
+
+    /// <summary>Erkanntes Stichwort, falls der Modus per Sprachbefehl gewählt wurde.</summary>
+    public string? Keyword { get; init; }
 }
 
 /// <summary>Transkription fehlgeschlagen. Die Aufnahme sollte aufbewahrt werden.</summary>
@@ -38,7 +44,8 @@ public sealed class TranscriptionFailedException(string message, Exception inner
 /// </summary>
 public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? chat)
 {
-    public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct)
+    /// <param name="allowKeywords">Sprachbefehle am Anfang auswerten (nur beim normalen Diktat).</param>
+    public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false)
     {
         TranscriptionResult tr;
         try
@@ -60,6 +67,16 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         var dictionary = new DictionaryApplier(settings.Dictionary);
         var verbatim = PostProcess(tr.Text, language, dictionary);
 
+        if (allowKeywords && settings.VoiceKeywords && ModeKeywords.Detect(verbatim, settings) is { } kw)
+        {
+            var r = await RewriteAsync(kw.Rest, language, kw.Mode, settings, dictionary, ct).ConfigureAwait(false);
+            return r with { SaveAsNote = kw.IsNote, Keyword = kw.Keyword };
+        }
+        return await RewriteAsync(verbatim, language, mode, settings, dictionary, ct).ConfigureAwait(false);
+    }
+
+    private async Task<DictationResult> RewriteAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, DictionaryApplier dictionary, CancellationToken ct)
+    {
         if (verbatim.Length == 0 || !mode.NeedsLanguageModel)
             return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.None, null);
 

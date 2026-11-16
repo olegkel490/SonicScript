@@ -176,6 +176,10 @@ public static partial class Strings
 
         // Neu: Tastenfeld, Töne, Ducking, Bearbeiten, Verlauf, Update
         ["hotkey.press"] = "Tasten drücken …",
+        ["settings.voice_keywords"] = "Sprachbefehle am Anfang erkennen",
+        ["settings.voice_keywords_hint"] = "Mit Stichwort und kurzer Pause beginnen: „Prompt: …“, „Englisch: …“, „Emoji: …“, „Notiz: …“ oder der Name eines eigenen Modus. Die Stichwörter stehen bei den Modi. So brauchst du nur eine Taste.",
+        ["settings.modes.keywords"] = "Sprachbefehle, kommagetrennt (z. B. Prompt, Mail)",
+        ["settings.notes.keywords"] = "Sprachbefehle für Notizen (kommagetrennt)",
         ["hotkey.none"] = "keine Taste",
         ["hotkey.clear"] = "Taste entfernen",
         ["settings.hotkey.edit"] = "Markierten Text bearbeiten",
@@ -386,6 +390,10 @@ public static partial class Strings
         ["setup.error"] = "Error: {0}",
 
         ["hotkey.press"] = "Press keys …",
+        ["settings.voice_keywords"] = "Recognize voice commands at the start",
+        ["settings.voice_keywords_hint"] = "Start with a keyword and a short pause: \"Prompt: …\", \"English: …\", \"Emoji: …\", \"Note: …\" or the name of a custom mode. The keywords are listed with the modes. That way you only need one key.",
+        ["settings.modes.keywords"] = "Voice commands, comma-separated (e.g. Prompt, Mail)",
+        ["settings.notes.keywords"] = "Voice commands for notes (comma-separated)",
         ["hotkey.none"] = "no key",
         ["hotkey.clear"] = "Remove key",
         ["settings.hotkey.edit"] = "Edit selected text",

@@ -145,7 +145,7 @@ public class SettingsTests
         using var dir = new TempDir();
         var store = new SettingsStore(Path.Combine(dir.Path, "settings.json"));
         var s = store.Load();
-        Assert.Equal(5, s.Modes.Count);
+        Assert.Equal(6, s.Modes.Count);
 
         s.Modes.RemoveAll(m => m.Id == BuiltInModes.EmojiId);
         s.Modes.Add(new ModeDefinition { Name = "Übersetzen", Instruction = "Ins Englische", Hotkey = KeyCombo.Parse("Ctrl+Alt+T") });
@@ -159,10 +159,10 @@ public class SettingsTests
         Assert.Contains("\"type\"", json);
 
         var loaded = store.Load();
-        Assert.Equal(6, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
+        Assert.Equal(7, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
         Assert.Equal(BuiltInModes.VerbatimId, loaded.DefaultModeId);
         Assert.Equal(1000, loaded.History.MaxEntries);
-        Assert.Equal(InsertionMethod.Type, loaded.AppRules[0].Insertion);
+        Assert.Equal(InsertionMethod.Type, loaded.AppRules.Last().Insertion);
         Assert.Contains(loaded.BuildHotkeyBindings(), b => b.Combo == KeyCombo.Parse("Ctrl+Alt+T"));
     }
 
@@ -236,11 +236,11 @@ public class HotkeyMigrationTests
         var store = new SettingsStore(path);
         var s = store.Load();
         Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
-        Assert.Equal("Ctrl+Shift+-", s.Notes.Hotkey.ToString());
+        Assert.True(s.Notes.Hotkey.IsEmpty);                                 // ab Schema 4: Sprachbefehl "Notiz:"
         Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
         Assert.Equal("F8", s.FindMode("calm")!.Hotkey.ToString());          // selbst geändert → bleibt
-        Assert.Equal("Ctrl+Shift+,", s.FindMode("emoji")!.Hotkey.ToString());
-        Assert.Equal("Ctrl+-", s.FindMode("translate")!.Hotkey.ToString());
+        Assert.True(s.FindMode("emoji")!.Hotkey.IsEmpty);
+        Assert.True(s.FindMode("translate")!.Hotkey.IsEmpty);
         Assert.Equal(AppSettings.CurrentSchema, s.SchemaVersion);
 
         // Nach der Migration wird nichts mehr umgestellt (z. B. wenn der Nutzer bewusst Ctrl+Win wählt).

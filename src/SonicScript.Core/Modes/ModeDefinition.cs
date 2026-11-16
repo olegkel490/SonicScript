@@ -16,6 +16,8 @@ public enum ModeKind
     Custom,
     /// <summary>Übersetzung ins Englische.</summary>
     Translate,
+    /// <summary>Gesprochener Gedanke → klarer Prompt für ChatGPT, Claude, Cursor …</summary>
+    Prompt,
 }
 
 public sealed class ModeDefinition
@@ -32,6 +34,12 @@ public sealed class ModeDefinition
     public KeyCombo Hotkey { get; set; } = KeyCombo.None;
     public TriggerMode Trigger { get; set; } = TriggerMode.Hold;
 
+    /// <summary>
+    /// Sprachbefehle, kommagetrennt: Beginnt ein Diktat mit "Stichwort:" (bzw. Komma/Punkt), gilt dieser Modus.
+    /// Leer bei eigenen Modi = der Name.
+    /// </summary>
+    public string Keywords { get; set; } = "";
+
     public bool IsBuiltIn => Kind != ModeKind.Custom;
     public bool NeedsLanguageModel => Kind != ModeKind.Verbatim;
 
@@ -45,19 +53,42 @@ public static class BuiltInModes
     public const string CalmId = "calm";
     public const string EmojiId = "emoji";
     public const string TranslateId = "translate";
+    public const string PromptId = "prompt";
 
     public static List<ModeDefinition> CreateDefaults() =>
     [
-        new() { Id = VerbatimId, Kind = ModeKind.Verbatim, Name = "SonicScript", Symbol = "◉", Temperature = 0 },
+        new() { Id = VerbatimId, Kind = ModeKind.Verbatim, Name = "SonicScript", Symbol = "◉", Temperature = 0,
+                Keywords = DefaultKeywords[VerbatimId] },
         new() { Id = ImproveId, Kind = ModeKind.Improve, Name = "SonicScript+", Symbol = "✎", Temperature = 0.3,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemPeriod) },
+                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemPeriod), Keywords = DefaultKeywords[ImproveId] },
         new() { Id = CalmId, Kind = ModeKind.Calm, Name = "SonicScript $%&!", Symbol = "☯", Temperature = 0.4,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemPeriod) },
+                Keywords = DefaultKeywords[CalmId] },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemComma) },
+                Keywords = DefaultKeywords[EmojiId] },
         new() { Id = TranslateId, Kind = ModeKind.Translate, Name = "SonicScript EN", Symbol = "EN", Temperature = 0.2,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemMinus) },
+                Keywords = DefaultKeywords[TranslateId] },
+        new() { Id = PromptId, Kind = ModeKind.Prompt, Name = "SonicScript Prompt", Symbol = "»", Temperature = 0.3,
+                Keywords = DefaultKeywords[PromptId] },
     ];
+
+    /// <summary>Standard-Sprachbefehle der eingebauten Modi.</summary>
+    public static readonly IReadOnlyDictionary<string, string> DefaultKeywords = new Dictionary<string, string>
+    {
+        [VerbatimId] = "Wörtlich, Wortgetreu, Verbatim",
+        [ImproveId] = "Sauber, Plus, Clean",
+        [CalmId] = "Ruhig, Sachlich, Calm",
+        [EmojiId] = "Emoji, Emojis",
+        [TranslateId] = "Englisch, Auf Englisch, English, Übersetze, Übersetzen",
+        [PromptId] = "Prompt",
+    };
+
+    /// <summary>Standardtasten von Schema 2/3, die mit Schema 4 entfallen (Modi per Sprachbefehl).</summary>
+    internal static readonly Dictionary<string, KeyCombo> Schema3Hotkeys = new()
+    {
+        [CalmId] = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemPeriod),
+        [EmojiId] = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemComma),
+        [TranslateId] = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemMinus),
+    };
 
     /// <summary>Standardtasten bis Schema 1 (für die Migration auf die neuen Tasten).</summary>
     internal static readonly Dictionary<string, KeyCombo> LegacyHotkeys = new()
