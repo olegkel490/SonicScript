@@ -5,6 +5,14 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  # "Release erstellen"-Button: Actions → CI → Run workflow → Version eingeben (z. B. 0.1.1).
+  # Baut main, legt den Tag v<Version> an und veröffentlicht das Release mit der .exe.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version ohne "v", z. B. 0.1.1'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,7 +22,23 @@ jobs:
     name: Build & test (Windows)
     runs-on: windows-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+      release: ${{ steps.version.outputs.release }}
     steps:
+      - name: Check release input
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Releases nur von main (gewählt: $GITHUB_REF)."; exit 1
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Ungültige Version '$VERSION' – erwartet z. B. 0.1.1"; exit 1
+          fi
+
       - uses: actions/checkout@v4
 
       - name: Secret hygiene scan
@@ -42,9 +66,18 @@ jobs:
       - name: Version
         id: version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF_NAME#v}"; else v="0.1.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            v="$INPUT_VERSION"; release=true
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            v="${GITHUB_REF_NAME#v}"; release=true
+          else
+            v="0.1.0-ci.${GITHUB_RUN_NUMBER}"; release=false
+          fi
           echo "value=$v" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
 
       - name: Publish single-file exe
         run: >
@@ -62,19 +95,33 @@ jobs:
   release:
     name: GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      TAG: v${{ needs.build.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Tag must be new (button)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} existiert bereits – bitte eine neue Version wählen."; exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           name: SonicScript-win-x64
           path: dist
       - name: Checksum
         run: cd dist && sha256sum SonicScript.exe > SonicScript.exe.sha256
+      # Legt beim Button den Tag auf dem gebauten Commit an. Mit dem GITHUB_TOKEN erstellte Tags lösen
+      # keinen weiteren Workflow-Lauf aus, es entsteht also kein doppeltes Release.
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ env.TAG }}
           files: |
             dist/SonicScript.exe
             dist/SonicScript.exe.sha256

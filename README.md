@@ -102,7 +102,9 @@ dotnet publish src/SonicScript.App -c Release -r win-x64 --self-contained true `
   -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o dist
 ```
 
-Ein Tag `v*` baut in GitHub Actions ein Release mit `SonicScript.exe` und SHA-256-Prüfsumme.
+Release erstellen: **Actions → CI → Run workflow** (Branch `main`), Version eingeben (z. B. `0.1.1`). Der Workflow baut, testet,
+legt den Tag `v0.1.1` an und veröffentlicht das Release mit `SonicScript.exe` und SHA-256-Prüfsumme.
+Ein von Hand gepushter Tag `v*` funktioniert genauso.
 
 ## Aufbau
 
