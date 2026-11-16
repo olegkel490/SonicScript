@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:SonicScript.App"
+        x:Class="SonicScript.App.Views.LibraryWindow"
+        Width="380" CanResize="True" ShowInTaskbar="True"
+        Icon="avares://SonicScript/Assets/icon.png"
+        Title="{l:Tr library.title}">
+  <DockPanel Margin="14">
+    <StackPanel DockPanel.Dock="Top" Spacing="8">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+        <Button x:Name="PrevMonth" Grid.Column="0" Content="«" ToolTip.Tip="-1 M" />
+        <Button x:Name="PrevDay" Grid.Column="1" Content="‹" Margin="4,0,0,0" />
+        <Button x:Name="DayLabel" Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="6,0" FontWeight="SemiBold" />
+        <Button x:Name="NextDay" Grid.Column="3" Content="›" Margin="0,0,4,0" />
+        <Button x:Name="NextMonth" Grid.Column="4" Content="»" ToolTip.Tip="+1 M" />
+      </Grid>
+      <TextBlock x:Name="Summary" Classes="hint" />
+      <WrapPanel x:Name="MonthDays" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,10,0,0">
+      <Button x:Name="DeleteUsed" Content="{l:Tr library.delete_used}" />
+      <Button x:Name="DeleteAll" Content="{l:Tr library.delete_all}" />
+      <Button x:Name="OpenFolder" Content="{l:Tr library.open_folder}" />
+    </StackPanel>
+    <ScrollViewer Margin="0,10,0,0">
+      <StackPanel x:Name="List" Spacing="6" />
+    </ScrollViewer>
+  </DockPanel>
+</Window>

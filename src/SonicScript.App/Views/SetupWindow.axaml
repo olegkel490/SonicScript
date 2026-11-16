@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:l="using:SonicScript.App"
+        x:Class="SonicScript.App.Views.SetupWindow"
+        Width="560" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Icon="avares://SonicScript/Assets/icon.png"
+        Title="{l:Tr setup.title}">
+  <StackPanel Margin="24" Spacing="10">
+    <StackPanel Orientation="Horizontal" Spacing="14">
+      <Image Source="avares://SonicScript/Assets/icon.png" Width="56" Height="56" />
+      <TextBlock Text="SonicScript" FontSize="26" FontWeight="Bold" VerticalAlignment="Center" />
+    </StackPanel>
+    <TextBlock Text="{l:Tr setup.welcome}" TextWrapping="Wrap" />
+
+    <TextBlock x:Name="Recommendation" FontWeight="SemiBold" Margin="0,8,0,0" />
+    <ComboBox x:Name="Model" HorizontalAlignment="Stretch" />
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button x:Name="Download" Content="{l:Tr setup.download}" Classes="accent" />
+      <Button x:Name="UseSmaller" Content="{l:Tr setup.use_smaller}" IsVisible="False" />
+    </StackPanel>
+    <ProgressBar x:Name="Progress" Minimum="0" Maximum="1" IsVisible="False" />
+    <TextBlock x:Name="Status" TextWrapping="Wrap" />
+
+    <TextBlock Classes="h2" Text="{l:Tr setup.notes_folder}" />
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBox x:Name="NotesFolder" Width="380" />
+      <Button x:Name="BrowseNotes" Content="{l:Tr common.browse}" />
+    </StackPanel>
+
+    <TextBlock Classes="hint" Text="{l:Tr setup.ollama}" Margin="0,8,0,0" />
+
+    <Button x:Name="Finish" HorizontalAlignment="Right" Margin="0,12,0,0" IsEnabled="False" />
+  </StackPanel>
+</Window>

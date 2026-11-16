@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Whisper.net kopiert seine nativen Bibliotheken für alle Plattformen als "None"-Dateien in runtimes/.
+    SonicScript bettet stattdessen nur die Windows-x64-DLLs in SonicScript.LocalWhisper ein und entpackt sie
+    beim Start (WhisperRuntime.cs). So bleibt es eine einzelne .exe ohne Ballast für Linux/macOS.
+  -->
+  <Target Name="SonicScriptRemoveWhisperRuntimeContent" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_SonicWhisperNone Include="@(None)" Condition="$([System.String]::Copy('%(None.FullPath)').ToLowerInvariant().Replace('\', '/').Contains('/whisper.net.runtime'))" />
+      <None Remove="@(_SonicWhisperNone)" />
+    </ItemGroup>
+  </Target>
+</Project>
