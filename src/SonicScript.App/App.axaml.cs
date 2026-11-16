@@ -15,9 +15,20 @@ public sealed partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            _controller = new AppController(desktop);
-            desktop.Exit += (_, _) => _controller.Dispose();
-            _controller.Start();
+            try
+            {
+                _controller = new AppController(desktop);
+                desktop.Exit += (_, _) => _controller.Dispose();
+                _controller.Start();
+                Program.ActivationRequested += () =>
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() => _controller.ShowMainWindow());
+            }
+            catch (Exception ex)
+            {
+                // Ohne diese Meldung würde die App beim Start still verschwinden.
+                Log.Error("Startup failed", ex);
+                Views.StartupError.Show(ex, desktop);
+            }
         }
         base.OnFrameworkInitializationCompleted();
     }

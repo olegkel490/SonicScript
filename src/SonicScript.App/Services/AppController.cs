@@ -99,8 +99,8 @@ public sealed class AppController : IDisposable
 
     public void Start()
     {
-        try { WhisperRuntime.Prepare(AppPaths.Local); }
-        catch (Exception ex) { Log.Error("Whisper runtime", ex); }
+        Log.Info($"Start {CurrentVersion} on {Environment.OSVersion}");
+        WhisperRuntime.StartInBackground(AppPaths.Local);
         Pending.Cleanup();
         CleanupStaleRecordings();
         History.Prune(Settings.History.MaxEntries, Settings.History.MaxAgeDays);
@@ -112,6 +112,7 @@ public sealed class AppController : IDisposable
         try
         {
             _hook.Install();
+            Log.Info("Keyboard hook installed");
         }
         catch (Exception ex)
         {
@@ -120,12 +121,18 @@ public sealed class AppController : IDisposable
         }
 
         CreateTray();
+        Log.Info("Tray created");
         PreloadTranscriber();
 
         if (!Settings.FirstRunCompleted)
-            new SetupWindow(this).Show();
+        {
+            ShowMainWindow();
+            Log.Info("Setup window shown");
+        }
         else if (!Program.StartInBackground)
+        {
             Toast.Show(Strings.Format("tray.tooltip", Settings.DictateHotkey));
+        }
 
         if (Settings.CheckForUpdates) _ = CheckForUpdatesAsync();
     }
@@ -480,6 +487,26 @@ public sealed class AppController : IDisposable
 
     // ── Fenster ────────────────────────────────────────────────────────────────
 
+    private SetupWindow? _setupWindow;
+
+    /// <summary>Einrichtung beim ersten Start, sonst Einstellungen (auch wenn SonicScript erneut gestartet wird).</summary>
+    public void ShowMainWindow()
+    {
+        if (Settings.FirstRunCompleted)
+        {
+            OpenSettings();
+            return;
+        }
+        if (_setupWindow is null)
+        {
+            _setupWindow = new SetupWindow(this);
+            _setupWindow.Closed += (_, _) => _setupWindow = null;
+            _setupWindow.Show();
+        }
+        _setupWindow.WindowState = WindowState.Normal;
+        _setupWindow.Activate();
+    }
+
     public void OpenSettings(string? tab = null)
     {
         if (_settingsWindow is null)
@@ -488,6 +515,7 @@ public sealed class AppController : IDisposable
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
         }
+        _settingsWindow.WindowState = WindowState.Normal;
         _settingsWindow.SelectTab(tab);
         _settingsWindow.Activate();
     }
@@ -510,7 +538,7 @@ public sealed class AppController : IDisposable
     private void CreateTray()
     {
         _tray = new TrayIcon { Icon = LoadIcon("idle"), IsVisible = true };
-        _tray.Clicked += (_, _) => OpenSettings();
+        _tray.Clicked += (_, _) => ShowMainWindow();
         TrayIcon.SetIcons(Application.Current!, [_tray]);
         RebuildTrayMenu();
     }
@@ -580,7 +608,7 @@ public sealed class AppController : IDisposable
         }
 
         var settings = new NativeMenuItem(Strings.Get("tray.settings"));
-        settings.Click += (_, _) => OpenSettings();
+        settings.Click += (_, _) => ShowMainWindow();
         menu.Add(settings);
 
         var quit = new NativeMenuItem(Strings.Get("tray.quit"));

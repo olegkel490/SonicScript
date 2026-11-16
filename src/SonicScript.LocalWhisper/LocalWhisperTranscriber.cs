@@ -59,6 +59,7 @@ public sealed class LocalWhisperTranscriber : ITranscriber, IDisposable
     {
         if (_factory is not null) return _factory;
         if (!File.Exists(_modelPath)) throw new FileNotFoundException("model_missing", _modelPath);
+        WhisperRuntime.EnsureReady();
         _factory = WhisperFactory.FromPath(_modelPath, new WhisperFactoryOptions { UseGpu = _useGpu });
         return _factory;
     }
