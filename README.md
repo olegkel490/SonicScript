@@ -21,15 +21,25 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 
 | Taste (Standard) | Was passiert |
 |---|---|
-| `Strg+,` halten | Diktat. Der Modus kommt aus der App-Regel, sonst wortgetreu |
+| `Strg+,` halten | Diktat. Der Modus kommt aus Sprachbefehl oder App-Regel, sonst wortgetreu |
 | `Strg+.` halten | **SonicScript+**: sauberer Schrifttext |
-| `Strg+-` halten | **EN**: Diktat wird ins Englische übersetzt |
-| `Strg+Shift+.` halten | **$%&!**: Frust wird zu einer ruhigen, wirksamen Nachricht |
-| `Strg+Shift+,` halten | **:)**: Text mit passenden Emojis |
-| `Strg+Shift+-` halten | **Blitznotiz**: wird nicht eingefügt, sondern als Markdown abgelegt |
 | `Strg+Alt+.` halten | **Markierten Text bearbeiten**: „mach das kürzer“, „formeller“, „auf Englisch“ |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
+
+**Sprachbefehle statt Tasten:** Mit einem Stichwort und einer kurzen Pause beginnen.
+
+| Sagen | Modus |
+|---|---|
+| „**Prompt:** …“ | Gedanke wird zu einem klaren Prompt für ChatGPT, Claude, Cursor |
+| „**Englisch:** …“ | Übersetzung ins Englische |
+| „**Ruhig:** …“ | Frust wird zu einer ruhigen, wirksamen Nachricht |
+| „**Emoji:** …“ | Text mit passenden Emojis |
+| „**Notiz:** …“ | wird nicht eingefügt, sondern als Blitznotiz abgelegt |
+| „**Mail:** …“ | eigener Modus „Mail“ (Name oder eigene Stichwörter) |
+
+In ChatGPT, Claude, Gemini, Perplexity, Copilot, Cursor und Windsurf ist der **Prompt-Modus** automatisch aktiv
+(App-Regeln, frei änderbar).
 
 **Kurz tippen statt halten** (unter 0,35 s) löst die normale Funktion der Taste aus, z. B. `Strg+-` = Herauszoomen.
 Die Tasten liegen auf deutschen Laptop- und externen Tastaturen an derselben Stelle neben der rechten Shift-Taste.

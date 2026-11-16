@@ -69,10 +69,12 @@ public class PunctuationKeyTests
         var s = new SonicScript.Core.Settings.AppSettings();
         Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
         Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
-        Assert.Equal("Ctrl+-", s.FindMode("translate")!.Hotkey.ToString());
-        Assert.Equal("Ctrl+Shift+.", s.FindMode("calm")!.Hotkey.ToString());
-        Assert.Equal("Ctrl+Shift+,", s.FindMode("emoji")!.Hotkey.ToString());
-        Assert.Equal("Ctrl+Shift+-", s.Notes.Hotkey.ToString());
+        // Seit Schema 4 nur noch drei Tasten; die übrigen Modi per Sprachbefehl.
+        Assert.True(s.FindMode("translate")!.Hotkey.IsEmpty);
+        Assert.True(s.FindMode("calm")!.Hotkey.IsEmpty);
+        Assert.True(s.FindMode("emoji")!.Hotkey.IsEmpty);
+        Assert.True(s.Notes.Hotkey.IsEmpty);
+        Assert.Equal(3, s.BuildHotkeyBindings().Count(b => b.Combo.IsValid && b.Action != HotkeyAction.ToggleLibrary));
         Assert.Empty(HotkeyConflicts.Find(s.BuildHotkeyBindings()));
     }
 }

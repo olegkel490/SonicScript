@@ -7,7 +7,7 @@ namespace SonicScript.Core.Settings;
 
 public sealed class AppSettings
 {
-    public const int CurrentSchema = 3;
+    public const int CurrentSchema = 4;
 
     /// <summary>Fehlt in alten Dateien → 1 (Migration in <see cref="Normalize"/>).</summary>
     public int SchemaVersion { get; set; } = 1;
@@ -19,6 +19,9 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
     public bool ShowRecordingIndicator { get; set; } = true;
     public bool FirstRunCompleted { get; set; }
+
+    /// <summary>Sprachbefehle am Diktatanfang ("Prompt: …", "Englisch: …", "Notiz: …") wechseln den Modus.</summary>
+    public bool VoiceKeywords { get; set; } = true;
 
     /// <summary>Kurzer Ton bei Start und Ende einer Aufnahme.</summary>
     public bool PlaySounds { get; set; } = true;
@@ -45,7 +48,19 @@ public sealed class AppSettings
     public static readonly KeyCombo DefaultDictateHotkey = new(KeyModifiers.Ctrl, VirtualKeys.OemComma);
     public TriggerMode DictateTrigger { get; set; } = TriggerMode.Hold;
     public string DefaultModeId { get; set; } = BuiltInModes.VerbatimId;
-    public ObservableCollection<AppRule> AppRules { get; set; } = [];
+    public ObservableCollection<AppRule> AppRules { get; set; } = new(DefaultAppRules());
+
+    /// <summary>Prompt-Modus automatisch in KI-Chats und -Editoren.</summary>
+    public static IEnumerable<AppRule> DefaultAppRules() =>
+    [
+        new() { TitleContains = "ChatGPT", ModeId = BuiltInModes.PromptId },
+        new() { TitleContains = "Claude", ModeId = BuiltInModes.PromptId },
+        new() { TitleContains = "Gemini", ModeId = BuiltInModes.PromptId },
+        new() { TitleContains = "Perplexity", ModeId = BuiltInModes.PromptId },
+        new() { TitleContains = "Copilot", ModeId = BuiltInModes.PromptId },
+        new() { ProcessName = "Cursor", ModeId = BuiltInModes.PromptId },
+        new() { ProcessName = "Windsurf", ModeId = BuiltInModes.PromptId },
+    ];
 
     public InsertionSettings Insertion { get; set; } = new();
     public NotesSettings Notes { get; set; } = new();
@@ -67,7 +82,31 @@ public sealed class AppSettings
                 (DictateHotkey == EditHotkey || Notes.Hotkey == EditHotkey || Notes.LibraryHotkey == EditHotkey || Modes.Any(m => m.Hotkey == EditHotkey)))
                 EditHotkey = KeyCombo.None;
         }
+        if (SchemaVersion < 4) MigrateToSchema4();
         SchemaVersion = CurrentSchema;
+    }
+
+    /// <summary>
+    /// Schema 4: weniger Tasten. Unveränderte Standardtasten für Ruhig, Emoji, EN und Notiz entfallen (Sprachbefehle
+    /// ersetzen sie), eingebaute Modi bekommen ihre Stichwörter, Prompt-Regeln für KI-Apps kommen dazu.
+    /// </summary>
+    private void MigrateToSchema4()
+    {
+        foreach (var m in Modes)
+        {
+            if (BuiltInModes.Schema3Hotkeys.TryGetValue(m.Id, out var old) && m.Hotkey == old) m.Hotkey = KeyCombo.None;
+            if (string.IsNullOrWhiteSpace(m.Keywords) && BuiltInModes.DefaultKeywords.TryGetValue(m.Id, out var kw)) m.Keywords = kw;
+        }
+        if (Notes.Hotkey == NotesSettings.Schema3Hotkey) Notes.Hotkey = KeyCombo.None;
+        if (string.IsNullOrWhiteSpace(Notes.Keywords)) Notes.Keywords = NotesSettings.DefaultKeywords;
+
+        foreach (var rule in DefaultAppRules())
+        {
+            var exists = AppRules.Any(r =>
+                string.Equals(r.ProcessName.Trim(), rule.ProcessName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(r.TitleContains.Trim(), rule.TitleContains, StringComparison.OrdinalIgnoreCase));
+            if (!exists) AppRules.Add(rule);
+        }
     }
 
     private void MigrateToSchema2()
@@ -79,12 +118,12 @@ public sealed class AppSettings
         if (DictateHotkey == oldDictate && !Taken(DefaultDictateHotkey)) DictateHotkey = DefaultDictateHotkey;
 
         var oldNote = new KeyCombo(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.Space);
-        if (Notes.Hotkey == oldNote && !Taken(NotesSettings.DefaultHotkey)) Notes.Hotkey = NotesSettings.DefaultHotkey;
+        if (Notes.Hotkey == oldNote && !Taken(NotesSettings.Schema3Hotkey)) Notes.Hotkey = NotesSettings.Schema3Hotkey;
 
         foreach (var m in Modes)
         {
             if (!BuiltInModes.LegacyHotkeys.TryGetValue(m.Id, out var legacy) || m.Hotkey != legacy) continue;
-            var target = defaults.First(d => d.Id == m.Id).Hotkey;
+            var target = BuiltInModes.Schema3Hotkeys.TryGetValue(m.Id, out var s3) ? s3 : defaults.First(d => d.Id == m.Id).Hotkey;
             if (!Taken(target)) m.Hotkey = target;
         }
     }
@@ -249,9 +288,15 @@ public sealed class AppRule
 public sealed class NotesSettings
 {
     public string Folder { get; set; } = "";
-    public static readonly KeyCombo DefaultHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemMinus);
+    /// <summary>Standardtaste in Schema 2/3; seit Schema 4 ohne Taste (Sprachbefehl "Notiz: …").</summary>
+    public static readonly KeyCombo Schema3Hotkey = new(KeyModifiers.Ctrl | KeyModifiers.Shift, VirtualKeys.OemMinus);
 
-    public KeyCombo Hotkey { get; set; } = DefaultHotkey;
+    public const string DefaultKeywords = "Notiz, Note, Merken";
+
+    public KeyCombo Hotkey { get; set; } = KeyCombo.None;
+
+    /// <summary>Sprachbefehle, die ein Diktat als Notiz ablegen statt einzufügen.</summary>
+    public string Keywords { get; set; } = DefaultKeywords;
     public TriggerMode Trigger { get; set; } = TriggerMode.Hold;
     public string ModeId { get; set; } = BuiltInModes.VerbatimId;
     public KeyCombo LibraryHotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'L');

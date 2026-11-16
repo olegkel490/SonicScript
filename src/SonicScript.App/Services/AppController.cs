@@ -333,7 +333,8 @@ public sealed class AppController : IDisposable
             }
             else
             {
-                var result = await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token));
+                var allowKeywords = s.Binding.Action == HotkeyAction.Dictate;
+                var result = await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token, allowKeywords));
                 await DeliverAsync(s, result, context);
             }
         }
@@ -398,7 +399,17 @@ public sealed class AppController : IDisposable
             return;
         }
 
-        if (s.IsNote)
+        var asNote = s.IsNote || result.SaveAsNote;
+        if (asNote && string.IsNullOrWhiteSpace(s.Settings.Notes.Folder))
+        {
+            // "Notiz: …" ohne Notizordner → nicht verlieren, sondern in die Zwischenablage.
+            await ClipboardService.SetTextAsync(result.Final);
+            Toast.Show(Strings.Get("library.no_folder") + " " + Strings.Get("toast.copied"), isError: true);
+            Remember(s, result);
+            return;
+        }
+
+        if (asNote)
         {
             new NoteStore(s.Settings.Notes.Folder).Append(DateTime.Now, result.Final);
             if (s.Settings.Notes.CopyToClipboard) await ClipboardService.SetTextAsync(result.Final);

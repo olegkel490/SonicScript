@@ -145,7 +145,7 @@ public class TranslateModeTests
     {
         Assert.Equal(ModeKind.Translate, Translate.Kind);
         Assert.True(Translate.IsBuiltIn);
-        Assert.Equal("Ctrl+-", Translate.Hotkey.ToString());
+        Assert.True(Translate.Hotkey.IsEmpty); // per Sprachbefehl "Englisch: …"
     }
 
     [Theory]

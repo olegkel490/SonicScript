@@ -69,6 +69,9 @@
             </StackPanel>
             <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.hint}" />
 
+            <CheckBox IsChecked="{Binding VoiceKeywords}" Content="{l:Tr settings.voice_keywords}" Margin="0,8,0,0" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.voice_keywords_hint}" />
+
             <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.edit}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
               <c:HotkeyBox Width="220" Combo="{Binding EditHotkey}" />
@@ -168,12 +171,14 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Border BorderBrush="#33808080" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,8">
-                    <Grid ColumnDefinitions="60,*,170,150" RowDefinitions="Auto,Auto,Auto">
+                    <Grid ColumnDefinitions="60,*,170,150" RowDefinitions="Auto,Auto,Auto,Auto">
                       <TextBox Text="{Binding Symbol}" Margin="0,0,6,0" ToolTip.Tip="{l:Tr settings.modes.symbol}" />
                       <TextBox Grid.Column="1" Text="{Binding Name}" Margin="0,0,6,0" ToolTip.Tip="{l:Tr settings.modes.name}" />
                       <c:HotkeyBox Grid.Column="2" Combo="{Binding Hotkey}" Margin="0,0,6,0" ToolTip.Tip="{l:Tr settings.modes.hotkey}" />
                       <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" ItemsSource="{x:Static l:Choices.TriggerModes}"
                                 SelectedItem="{Binding Trigger}" ItemTemplate="{StaticResource EnumText}" />
+                      <TextBox Grid.Row="3" Grid.ColumnSpan="4" Margin="0,6,0,0" Text="{Binding Keywords}"
+                               Watermark="{l:Tr settings.modes.keywords}" ToolTip.Tip="{l:Tr settings.modes.keywords}" />
                       <TextBox Grid.Row="1" Grid.ColumnSpan="4" Margin="0,6,0,0" Text="{Binding Instruction}" AcceptsReturn="True"
                                TextWrapping="Wrap" MinHeight="54" Watermark="{l:Tr settings.modes.instruction}"
                                IsVisible="{Binding NeedsLanguageModel}" />
@@ -249,6 +254,8 @@
             <ComboBox Width="220" ItemsSource="{Binding Modes}" SelectedValue="{Binding Notes.ModeId}"
                       SelectedValueBinding="{Binding Id}" DisplayMemberBinding="{Binding Name}" />
             <CheckBox IsChecked="{Binding Notes.CopyToClipboard}" Content="{l:Tr settings.notes.copy}" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.notes.keywords}" />
+            <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding Notes.Keywords}" />
             <TextBlock Classes="h2" Text="{l:Tr settings.notes.library_hotkey}" />
             <c:HotkeyBox Width="220" HorizontalAlignment="Left" Combo="{Binding Notes.LibraryHotkey}" />
             <TextBlock Classes="h2" Text="{l:Tr settings.notes.dock}" />
