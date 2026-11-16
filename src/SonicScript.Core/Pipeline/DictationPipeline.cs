@@ -89,6 +89,57 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         return new DictationResult(verbatim, dictionary.Apply(cleaned), language, mode, DictationWarning.None, null);
     }
 
+    /// <summary>
+    /// "Auswahl bearbeiten": Anweisung transkribieren und auf <paramref name="selectedText"/> anwenden.
+    /// Scheitert das Sprachmodell, ist <see cref="DictationResult.Final"/> leer (die Markierung bleibt unverändert).
+    /// </summary>
+    public async Task<DictationResult> RunEditAsync(string audioPath, string selectedText, AppSettings settings, CancellationToken ct)
+    {
+        var mode = EditMode;
+        TranscriptionResult tr;
+        try
+        {
+            var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
+            tr = await transcriber.TranscribeAsync(new TranscriptionRequest(audioPath, lang, BuildWhisperPrompt(settings.Dictionary.Terms)), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new TranscriptionFailedException(ex.Message, ex);
+        }
+
+        var language = tr.Language ?? (settings.Transcription.Language == "auto" ? null : settings.Transcription.Language);
+        var instruction = HallucinationFilter.Clean(tr.Text);
+        if (instruction.Length == 0) return new DictationResult("", "", language, mode, DictationWarning.None, null);
+        if (chat is null) return new DictationResult(instruction, "", language, mode, DictationWarning.ModeNotConfigured, null);
+
+        string raw;
+        try
+        {
+            raw = await chat.CompleteAsync(
+                PromptBuilder.BuildEditSystemPrompt(language, settings.Dictionary.Terms),
+                PromptBuilder.BuildEditUserMessage(selectedText, instruction), 0.3, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is RemoteServiceException or HttpRequestException or InvalidOperationException)
+        {
+            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeFailed, ex.Message);
+        }
+
+        var cleaned = RewriteGuard.Clean(raw);
+        if (RewriteGuard.Check(selectedText, cleaned, ModeKind.Custom) != RewriteVerdict.Ok)
+            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeRejected, null);
+        return new DictationResult(instruction, cleaned, language, mode, DictationWarning.None, null);
+    }
+
+    public static readonly ModeDefinition EditMode = new() { Id = "edit", Kind = ModeKind.Custom, Name = "Bearbeiten", Symbol = "✂" };
+
     public static string PostProcess(string text, string? language, DictionaryApplier dictionary)
     {
         var t = HallucinationFilter.Clean(text);

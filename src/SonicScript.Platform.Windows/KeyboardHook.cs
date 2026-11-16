@@ -23,6 +23,9 @@ public sealed class KeyboardHook : IDisposable
     /// <summary>Austauschbar, z. B. nach Änderung der Tastenbelegung.</summary>
     public HotkeyMatcher? Matcher { get; set; }
 
+    /// <summary>Alle Tasten durchlassen (z. B. während im Einstellungsfenster eine Taste aufgenommen wird).</summary>
+    public bool Suspended { get; set; }
+
     public event Action<HotkeyEvent>? HotkeyTriggered;
 
     public void Install()
@@ -35,7 +38,7 @@ public sealed class KeyboardHook : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && Matcher is { } matcher)
+        if (nCode >= 0 && !Suspended && Matcher is { } matcher)
         {
             try
             {

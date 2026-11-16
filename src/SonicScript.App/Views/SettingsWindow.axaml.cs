@@ -236,6 +236,7 @@ public sealed partial class SettingsWindow : Window
             }
         };
         Get<Button>("ClearHistory").Click += (_, _) => { _app.History.Clear(); RenderHistory(); };
+        Get<TextBox>("HistorySearch").TextChanged += (_, _) => RenderHistory();
         BindLists();
         RenderHistory();
     }
@@ -252,20 +253,39 @@ public sealed partial class SettingsWindow : Window
     {
         var panel = Get<StackPanel>("HistoryList");
         panel.Children.Clear();
-        foreach (var e in _app.History.GetAll())
+        var query = Get<TextBox>("HistorySearch").Text?.Trim() ?? "";
+        var entries = _app.History.GetAll()
+            .Where(e => query.Length == 0 ||
+                        e.Final.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                        e.Verbatim.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                        (e.App ?? "").Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            .Take(200);
+
+        foreach (var e in entries)
         {
-            var copy = new Button { Content = Strings.Get("settings.history.copy"), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
-            var text = e.Final;
-            copy.Click += async (_, _) => await ClipboardService.SetTextAsync(text);
+            var buttons = new StackPanel { Spacing = 4, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
+            var copy = new Button { Content = Strings.Get("settings.history.copy"), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+            var final = e.Final;
+            copy.Click += async (_, _) => { await ClipboardService.SetTextAsync(final); Toast.Show(Strings.Get("toast.copied")); };
+            buttons.Children.Add(copy);
+            if (e.Verbatim != e.Final && e.Verbatim.Length > 0)
+            {
+                var verbatim = new Button { Content = Strings.Get("settings.history.copy_verbatim"), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+                var v = e.Verbatim;
+                verbatim.Click += async (_, _) => { await ClipboardService.SetTextAsync(v); Toast.Show(Strings.Get("toast.copied")); };
+                buttons.Children.Add(verbatim);
+            }
+
             var row = new DockPanel();
-            DockPanel.SetDock(copy, Dock.Right);
-            row.Children.Add(copy);
+            DockPanel.SetDock(buttons, Dock.Right);
+            row.Children.Add(buttons);
             row.Children.Add(new StackPanel
             {
+                Margin = new Avalonia.Thickness(0, 0, 8, 0),
                 Children =
                 {
                     new TextBlock { Text = $"{e.Timestamp.ToLocalTime():dd.MM. HH:mm} · {_s.FindMode(e.ModeId)?.Name ?? e.ModeId} · {e.App}", Classes = { "hint" } },
-                    new TextBlock { Text = e.Final, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxHeight = 80 },
+                    new TextBlock { Text = e.Final, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxHeight = 100 },
                 },
             });
             panel.Children.Add(new Border { Child = row, Padding = new Avalonia.Thickness(8), BorderBrush = Avalonia.Media.Brushes.Gray, BorderThickness = new Avalonia.Thickness(0, 0, 0, 1) });
@@ -277,7 +297,7 @@ public sealed partial class SettingsWindow : Window
     private void Save()
     {
         var error = Get<TextBlock>("SaveError");
-        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey") };
+        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit") };
         foreach (var m in _s.Modes) names["mode:" + m.Id] = m.Name;
         var conflicts = HotkeyConflicts.Find(_s.BuildHotkeyBindings());
         var blocking = conflicts.Where(c => c.Kind != ConflictKind.ReservedBySystem).ToList();

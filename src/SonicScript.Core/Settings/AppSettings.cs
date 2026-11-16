@@ -7,7 +7,7 @@ namespace SonicScript.Core.Settings;
 
 public sealed class AppSettings
 {
-    public const int CurrentSchema = 2;
+    public const int CurrentSchema = 3;
 
     /// <summary>Fehlt in alten Dateien → 1 (Migration in <see cref="Normalize"/>).</summary>
     public int SchemaVersion { get; set; } = 1;
@@ -19,6 +19,21 @@ public sealed class AppSettings
     public bool CheckForUpdates { get; set; } = true;
     public bool ShowRecordingIndicator { get; set; } = true;
     public bool FirstRunCompleted { get; set; }
+
+    /// <summary>Kurzer Ton bei Start und Ende einer Aufnahme.</summary>
+    public bool PlaySounds { get; set; } = true;
+
+    /// <summary>Andere Audioquellen (Musik, Videos) während der Aufnahme leiser stellen.</summary>
+    public bool DuckOtherAudio { get; set; } = true;
+
+    /// <summary>Lautstärke der anderen Audioquellen während der Aufnahme in Prozent (0 = stumm).</summary>
+    public int DuckLevelPercent { get; set; } = 15;
+
+    /// <summary>Markierten Text per Sprache bearbeiten ("mach das kürzer").</summary>
+    public KeyCombo EditHotkey { get; set; } = DefaultEditHotkey;
+    public TriggerMode EditTrigger { get; set; } = TriggerMode.Hold;
+
+    public static readonly KeyCombo DefaultEditHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.OemPeriod);
 
     public TranscriptionSettings Transcription { get; set; } = new();
     public LanguageModelSettings LanguageModel { get; set; } = new();
@@ -44,6 +59,19 @@ public sealed class AppSettings
     private void MigrateHotkeys()
     {
         if (SchemaVersion >= CurrentSchema) return;
+        if (SchemaVersion < 2) MigrateToSchema2();
+        if (SchemaVersion < 3)
+        {
+            // Neue Taste "Auswahl bearbeiten": nur übernehmen, wenn frei.
+            if (EditHotkey == DefaultEditHotkey &&
+                (DictateHotkey == EditHotkey || Notes.Hotkey == EditHotkey || Notes.LibraryHotkey == EditHotkey || Modes.Any(m => m.Hotkey == EditHotkey)))
+                EditHotkey = KeyCombo.None;
+        }
+        SchemaVersion = CurrentSchema;
+    }
+
+    private void MigrateToSchema2()
+    {
         var defaults = BuiltInModes.CreateDefaults();
         bool Taken(KeyCombo c) => c == DictateHotkey || c == Notes.Hotkey || c == Notes.LibraryHotkey || Modes.Any(m => m.Hotkey == c);
 
@@ -59,7 +87,6 @@ public sealed class AppSettings
             var target = defaults.First(d => d.Id == m.Id).Hotkey;
             if (!Taken(target)) m.Hotkey = target;
         }
-        SchemaVersion = CurrentSchema;
     }
 
     public ModeDefinition? FindMode(string? id) => id is null ? null : Modes.FirstOrDefault(m => m.Id == id);
@@ -73,6 +100,7 @@ public sealed class AppSettings
             yield return new HotkeyBinding("mode:" + m.Id, m.Hotkey, m.Trigger, HotkeyAction.Dictate, m.Id);
         yield return new HotkeyBinding("note", Notes.Hotkey, Notes.Trigger, HotkeyAction.Note, Notes.ModeId);
         yield return new HotkeyBinding("library", Notes.LibraryHotkey, TriggerMode.Toggle, HotkeyAction.ToggleLibrary);
+        yield return new HotkeyBinding("edit", EditHotkey, EditTrigger, HotkeyAction.EditSelection);
     }
 
     /// <summary>Nach dem Laden reparieren: fehlende Teile ergänzen, Werte begrenzen.</summary>
@@ -99,6 +127,7 @@ public sealed class AppSettings
         History.MaxAgeDays = Math.Clamp(History.MaxAgeDays, 1, 365);
         Insertion.ClearClipboardAfterSeconds = Math.Clamp(Insertion.ClearClipboardAfterSeconds, 0, 3600);
         Insertion.RestoreDelayMs = Math.Clamp(Insertion.RestoreDelayMs, 100, 5000);
+        DuckLevelPercent = Math.Clamp(DuckLevelPercent, 0, 100);
     }
 }
 
@@ -196,6 +225,9 @@ public sealed class InsertionSettings
     public bool TypeAsFallback { get; set; } = true;
 
     public bool RestoreClipboard { get; set; } = true;
+
+    /// <summary>Leerzeichen und Groß-/Kleinschreibung an den Text vor dem Cursor anpassen.</summary>
+    public bool FitToContext { get; set; } = true;
     public int RestoreDelayMs { get; set; } = 800;
 
     /// <summary>0 = aus. Nur wirksam, wenn <see cref="RestoreClipboard"/> aus ist.</summary>

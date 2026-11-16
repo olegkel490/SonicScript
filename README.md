@@ -27,13 +27,14 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `Strg+Shift+.` halten | **$%&!**: Frust wird zu einer ruhigen, wirksamen Nachricht |
 | `Strg+Shift+,` halten | **:)**: Text mit passenden Emojis |
 | `Strg+Shift+-` halten | **Blitznotiz**: wird nicht eingefügt, sondern als Markdown abgelegt |
+| `Strg+Alt+.` halten | **Markierten Text bearbeiten**: „mach das kürzer“, „formeller“, „auf Englisch“ |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
 
 **Kurz tippen statt halten** (unter 0,35 s) löst die normale Funktion der Taste aus, z. B. `Strg+-` = Herauszoomen.
 Die Tasten liegen auf deutschen Laptop- und externen Tastaturen an derselben Stelle neben der rechten Shift-Taste.
 
-Jede Taste ist frei belegbar. Pro Taste lässt sich wählen, ob man sie hält oder einmal zum Starten und einmal
+Jede Taste ist frei belegbar: in den Einstellungen ins Tastenfeld klicken und die Kombination drücken. Pro Taste lässt sich wählen, ob man sie hält oder einmal zum Starten und einmal
 zum Stoppen drückt. Bei Kombinationen nur aus Modifikatoren (z. B. `Ctrl+Win`) wechselt eine zusätzlich gedrückte Modifikatortaste
 den Modus, ohne neu anzufangen. Eigene Modi bekommen eine eigene Anweisung und eine eigene Taste, etwa für Übersetzungen oder
 Antwortentwürfe.
@@ -68,6 +69,14 @@ Antwortentwürfe.
   - Ein Schlüssel wird nur über https oder an lokale/private Adressen geschickt.
   - Keine Telemetrie.
 - **Oberfläche:** Deutsch und Englisch.
+
+- **Rückmeldung:** leiser Ton bei Start und Ende der Aufnahme. Musik und Videos werden während der Aufnahme
+  leiser gestellt (einstellbar).
+- **Passt sich an:** Leerzeichen und Groß-/Kleinschreibung richten sich nach dem Text vor dem Cursor
+  (UI Automation, auch in Browsern und Office). Passwortfelder werden auch dort erkannt.
+- **Verlauf mit Suche:** Ergebnisse oder den wortgetreuen Text erneut kopieren (Tray → Verlauf).
+- **Updates in der App:** Tray → „Update installieren“ lädt die neue Version, prüft die SHA-256-Prüfsumme,
+  tauscht die .exe aus und startet neu.
 
 ## Installation
 
@@ -123,8 +132,8 @@ tests/SonicScript.Core.Tests      xUnit-Tests für den Kern
 
 ## Bekannte Grenzen
 
-- Passwortfelder werden nur bei klassischen Win32-Eingabefeldern erkannt, nicht in Browsern oder
-  XAML-Apps. Dafür ist UI Automation geplant.
+- Passwortfelder und Text vor dem Cursor kommen per UI Automation. Apps ohne UI-Automation-Unterstützung
+  bekommen den Text unverändert.
 - Läuft die Ziel-App mit Adminrechten, blockiert Windows das Einfügen. Der Text liegt dann in der
   Zwischenablage.
 - Die Einstellung „Grafikkarte nutzen“ wirkt erst nach einem Neustart.
