@@ -18,6 +18,10 @@ public enum HotkeyAction
     ToggleLibrary,
     /// <summary>Markierten Text per gesprochener Anweisung bearbeiten.</summary>
     EditSelection,
+    /// <summary>Nächsten Modus wählen.</summary>
+    NextMode,
+    /// <summary>Vorherigen Modus wählen.</summary>
+    PreviousMode,
 }
 
 public sealed record HotkeyBinding(string Id, KeyCombo Combo, TriggerMode Trigger, HotkeyAction Action, string? ModeId = null);
@@ -30,6 +34,8 @@ public enum HotkeyEventKind
     Switch,
     Cancel,
     ToggleLibrary,
+    NextMode,
+    PreviousMode,
 }
 
 public readonly record struct HotkeyEvent(HotkeyEventKind Kind, HotkeyBinding? Binding);
@@ -128,7 +134,7 @@ public sealed class HotkeyMatcher
                 if (isMod)
                 {
                     var upgrade = _bindings.FirstOrDefault(b =>
-                        b != active && b.Action != HotkeyAction.ToggleLibrary && b.Trigger == TriggerMode.Hold &&
+                        b != active && !IsCommand(b.Action) && b.Trigger == TriggerMode.Hold &&
                         b.Combo.IsModifierOnly && b.Combo.Modifiers == mods);
                     if (upgrade is not null)
                     {
@@ -154,9 +160,14 @@ public sealed class HotkeyMatcher
         if (match is null) return KeyResult.PassThrough;
 
         HotkeyEvent ev;
-        if (match.Action == HotkeyAction.ToggleLibrary)
+        if (IsCommand(match.Action))
         {
-            ev = new HotkeyEvent(HotkeyEventKind.ToggleLibrary, match);
+            ev = new HotkeyEvent(match.Action switch
+            {
+                HotkeyAction.NextMode => HotkeyEventKind.NextMode,
+                HotkeyAction.PreviousMode => HotkeyEventKind.PreviousMode,
+                _ => HotkeyEventKind.ToggleLibrary,
+            }, match);
         }
         else
         {
@@ -168,6 +179,9 @@ public sealed class HotkeyMatcher
 
         return match.Combo.IsModifierOnly ? new KeyResult(false, ev, false) : Swallowed(vk, ev);
     }
+
+    /// <summary>Einmalige Befehle ohne Aufnahme-Sitzung.</summary>
+    private static bool IsCommand(HotkeyAction a) => a is HotkeyAction.ToggleLibrary or HotkeyAction.NextMode or HotkeyAction.PreviousMode;
 
     private KeyResult OnUp(int vk)
     {

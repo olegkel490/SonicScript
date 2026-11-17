@@ -69,6 +69,15 @@
             </StackPanel>
             <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.hint}" />
 
+            <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.next}" />
+            <c:HotkeyBox Width="220" HorizontalAlignment="Left" Combo="{Binding NextModeHotkey}" />
+            <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.prev}" />
+            <c:HotkeyBox Width="220" HorizontalAlignment="Left" Combo="{Binding PrevModeHotkey}" />
+            <CheckBox IsChecked="{Binding ShowModeBadge}" Content="{l:Tr settings.badge}" Margin="0,8,0,0" />
+            <CheckBox IsChecked="{Binding EditInCycle}" Content="{l:Tr settings.cycle_edit}" />
+            <CheckBox IsChecked="{Binding NoteInCycle}" Content="{l:Tr settings.cycle_note}" />
+            <CheckBox IsChecked="{Binding AppRulesSelectMode}" Content="{l:Tr settings.app_rules_mode}" />
+
             <CheckBox IsChecked="{Binding VoiceKeywords}" Content="{l:Tr settings.voice_keywords}" Margin="0,8,0,0" />
             <TextBlock Classes="hint" Text="{l:Tr settings.voice_keywords_hint}" />
 
@@ -182,10 +191,10 @@
                       <TextBox Grid.Row="1" Grid.ColumnSpan="4" Margin="0,6,0,0" Text="{Binding Instruction}" AcceptsReturn="True"
                                TextWrapping="Wrap" MinHeight="54" Watermark="{l:Tr settings.modes.instruction}"
                                IsVisible="{Binding NeedsLanguageModel}" />
-                      <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Spacing="8" Margin="0,6,0,0"
-                                  IsVisible="{Binding NeedsLanguageModel}">
-                        <TextBlock Text="{l:Tr settings.modes.temperature}" VerticalAlignment="Center" />
-                        <Slider Width="200" Minimum="0" Maximum="1.2" Value="{Binding Temperature}" />
+                      <StackPanel Grid.Row="2" Grid.ColumnSpan="4" Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+                        <CheckBox IsChecked="{Binding InCycle}" Content="{l:Tr settings.modes.in_cycle}" Margin="0,0,12,0" />
+                        <TextBlock Text="{l:Tr settings.modes.temperature}" VerticalAlignment="Center" IsVisible="{Binding NeedsLanguageModel}" />
+                        <Slider Width="200" Minimum="0" Maximum="1.2" Value="{Binding Temperature}" IsVisible="{Binding NeedsLanguageModel}" />
                         <Button Content="{l:Tr common.remove}" IsVisible="{Binding !IsBuiltIn}"
                                 Command="{Binding #Root.RemoveModeCommand}" CommandParameter="{Binding}" />
                       </StackPanel>

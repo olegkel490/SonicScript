@@ -85,8 +85,9 @@ public class PromptModeTests
     public async Task KeywordSwitchesModeAndStripsKeyword()
     {
         var chat = new RecordingChat("Schreibe eine Python-Funktion, die CSV-Dateien einliest.");
+        var s = new AppSettings { VoiceKeywords = true };
         var r = await new DictationPipeline(new StubTranscriber("Prompt: ähm schreib mir ne Funktion die CSV einliest"), chat)
-            .RunAsync("a.wav", new AppSettings().DefaultMode, new AppSettings(), default, allowKeywords: true);
+            .RunAsync("a.wav", s.DefaultMode, s, default, allowKeywords: true);
         Assert.Equal(BuiltInModes.PromptId, r.Mode.Id);
         Assert.Equal("Prompt", r.Keyword);
         Assert.DoesNotContain("Prompt:", chat.User);
@@ -98,7 +99,7 @@ public class PromptModeTests
     public async Task KeywordsIgnoredWhenNotAllowedOrDisabled()
     {
         var chat = new RecordingChat("x");
-        var s = new AppSettings();
+        var s = new AppSettings { VoiceKeywords = true };
         var r = await new DictationPipeline(new StubTranscriber("Prompt: Test"), chat).RunAsync("a.wav", s.DefaultMode, s, default);
         Assert.Equal("Prompt: Test", r.Final);
 
@@ -110,8 +111,9 @@ public class PromptModeTests
     [Fact]
     public async Task NoteKeywordMarksResult()
     {
+        var s = new AppSettings { VoiceKeywords = true };
         var r = await new DictationPipeline(new StubTranscriber("Notiz. Milch kaufen"), null)
-            .RunAsync("a.wav", new AppSettings().DefaultMode, new AppSettings(), default, allowKeywords: true);
+            .RunAsync("a.wav", s.DefaultMode, s, default, allowKeywords: true);
         Assert.True(r.SaveAsNote);
         Assert.Equal("Milch kaufen", r.Final);
     }
@@ -148,7 +150,7 @@ public class PromptModeTests
         Assert.True(s.FindMode("calm")!.Hotkey.IsEmpty);
         Assert.Equal("F7", s.FindMode("emoji")!.Hotkey.ToString());      // selbst gewählt → bleibt
         Assert.True(s.FindMode("translate")!.Hotkey.IsEmpty);
-        Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
+        Assert.True(s.FindMode("improve")!.Hotkey.IsEmpty);
         Assert.True(s.Notes.Hotkey.IsEmpty);
         Assert.Contains("Englisch", s.FindMode("translate")!.Keywords);
         Assert.NotNull(s.FindMode("prompt"));

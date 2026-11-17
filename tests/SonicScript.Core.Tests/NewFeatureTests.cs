@@ -73,8 +73,8 @@ public class EditSelectionTests
     [Fact]
     public void EditHotkeyIsInBindingsAndConflictFree()
     {
-        var s = new AppSettings();
-        Assert.Contains(s.BuildHotkeyBindings(), b => b.Action == HotkeyAction.EditSelection && b.Combo.ToString() == "Ctrl+Alt+.");
+        var s = new AppSettings { EditHotkey = KeyCombo.Parse("Ctrl+Alt+Shift+.") };
+        Assert.Contains(s.BuildHotkeyBindings(), b => b.Action == HotkeyAction.EditSelection && b.Combo.ToString() == "Ctrl+Alt+Shift+.");
         Assert.Empty(HotkeyConflicts.Find(s.BuildHotkeyBindings()));
     }
 

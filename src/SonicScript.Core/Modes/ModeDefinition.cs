@@ -40,6 +40,9 @@ public sealed class ModeDefinition
     /// </summary>
     public string Keywords { get; set; } = "";
 
+    /// <summary>Im Moduswechsel (Strg+Alt+. / Strg+Alt+-) enthalten.</summary>
+    public bool InCycle { get; set; } = true;
+
     public bool IsBuiltIn => Kind != ModeKind.Custom;
     public bool NeedsLanguageModel => Kind != ModeKind.Verbatim;
 
@@ -60,7 +63,7 @@ public static class BuiltInModes
         new() { Id = VerbatimId, Kind = ModeKind.Verbatim, Name = "SonicScript", Symbol = "◉", Temperature = 0,
                 Keywords = DefaultKeywords[VerbatimId] },
         new() { Id = ImproveId, Kind = ModeKind.Improve, Name = "SonicScript+", Symbol = "✎", Temperature = 0.3,
-                Hotkey = new KeyCombo(KeyModifiers.Ctrl, VirtualKeys.OemPeriod), Keywords = DefaultKeywords[ImproveId] },
+                Keywords = DefaultKeywords[ImproveId] },
         new() { Id = CalmId, Kind = ModeKind.Calm, Name = "SonicScript $%&!", Symbol = "☯", Temperature = 0.4,
                 Keywords = DefaultKeywords[CalmId] },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
