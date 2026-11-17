@@ -50,6 +50,6 @@ public sealed partial class Toast : Window
         var s = screen.Scaling;
         Position = new PixelPoint(
             area.X + area.Width - (int)(Bounds.Width * s) - (int)(16 * s),
-            area.Y + area.Height - (int)(Bounds.Height * s) - (int)(16 * s));
+            area.Y + area.Height - (int)(Bounds.Height * s) - (int)(60 * s)); // über dem Modus-Abzeichen
     }
 }

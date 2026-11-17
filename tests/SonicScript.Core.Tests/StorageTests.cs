@@ -235,9 +235,9 @@ public class HotkeyMigrationTests
         """);
         var store = new SettingsStore(path);
         var s = store.Load();
-        Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
+        Assert.Equal("Ctrl+Alt+,", s.DictateHotkey.ToString());              // Schema 5
         Assert.True(s.Notes.Hotkey.IsEmpty);                                 // ab Schema 4: Sprachbefehl "Notiz:"
-        Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
+        Assert.True(s.FindMode("improve")!.Hotkey.IsEmpty);                 // Schema 5: per Moduswechsel
         Assert.Equal("F8", s.FindMode("calm")!.Hotkey.ToString());          // selbst geändert → bleibt
         Assert.True(s.FindMode("emoji")!.Hotkey.IsEmpty);
         Assert.True(s.FindMode("translate")!.Hotkey.IsEmpty);

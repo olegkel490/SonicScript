@@ -21,27 +21,24 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 
 | Taste (Standard) | Was passiert |
 |---|---|
-| `Strg+,` halten | Diktat. Der Modus kommt aus Sprachbefehl oder App-Regel, sonst wortgetreu |
-| `Strg+.` halten | **SonicScript+**: sauberer Schrifttext |
-| `Strg+Alt+.` halten | **Markierten Text bearbeiten**: „mach das kürzer“, „formeller“, „auf Englisch“ |
+| `Strg+Alt+,` halten | Diktat im **ausgewählten Modus** |
+| `Strg+Alt+.` | nächster Modus |
+| `Strg+Alt+-` | vorheriger Modus |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
 
-**Sprachbefehle statt Tasten:** Mit einem Stichwort und einer kurzen Pause beginnen.
+Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
+(markierten Text per Sprache ändern) → **Notiz** (ablegen statt einfügen). Welche Modi dabei sind, legst du in den
+Einstellungen fest; eigene Modi kommen automatisch dazu.
 
-| Sagen | Modus |
-|---|---|
-| „**Prompt:** …“ | Gedanke wird zu einem klaren Prompt für ChatGPT, Claude, Cursor |
-| „**Englisch:** …“ | Übersetzung ins Englische |
-| „**Ruhig:** …“ | Frust wird zu einer ruhigen, wirksamen Nachricht |
-| „**Emoji:** …“ | Text mit passenden Emojis |
-| „**Notiz:** …“ | wird nicht eingefügt, sondern als Blitznotiz abgelegt |
-| „**Mail:** …“ | eigener Modus „Mail“ (Name oder eigene Stichwörter) |
+**Immer sichtbar:** Das Tray-Symbol zeigt das Kürzel des aktuellen Modus (blau = bereit, rot = Aufnahme,
+gelb = Verarbeitung). Zusätzlich sitzt unten rechts ein kleines, verschiebbares **Modus-Abzeichen** mit ‹ › zum
+Wechseln per Klick (abschaltbar). Im Tray-Menü lässt sich der Modus auch direkt wählen.
 
-In ChatGPT, Claude, Gemini, Perplexity, Copilot, Cursor und Windsurf ist der **Prompt-Modus** automatisch aktiv
-(App-Regeln, frei änderbar).
+Optional: Sprachbefehle am Anfang („Prompt: …“, „Notiz: …“) und App-Regeln, die den Modus wählen (z. B. Prompt in
+ChatGPT) – beides in den Einstellungen einschaltbar.
 
-**Kurz tippen statt halten** (unter 0,35 s) löst die normale Funktion der Taste aus, z. B. `Strg+-` = Herauszoomen.
+**Kurz tippen statt halten** (unter 0,35 s) löst bei der Diktat-Taste die normale Funktion der Taste aus.
 Die Tasten liegen auf deutschen Laptop- und externen Tastaturen an derselben Stelle neben der rechten Shift-Taste.
 
 Jede Taste ist frei belegbar: in den Einstellungen ins Tastenfeld klicken und die Kombination drücken. Pro Taste lässt sich wählen, ob man sie hält oder einmal zum Starten und einmal

@@ -64,17 +64,17 @@ public class PunctuationKeyTests
     }
 
     [Fact]
-    public void DefaultsUseCtrlCommaPeriodMinus()
+    public void DefaultsUseCtrlAltCommaPeriodMinus()
     {
         var s = new SonicScript.Core.Settings.AppSettings();
-        Assert.Equal("Ctrl+,", s.DictateHotkey.ToString());
-        Assert.Equal("Ctrl+.", s.FindMode("improve")!.Hotkey.ToString());
-        // Seit Schema 4 nur noch drei Tasten; die übrigen Modi per Sprachbefehl.
-        Assert.True(s.FindMode("translate")!.Hotkey.IsEmpty);
-        Assert.True(s.FindMode("calm")!.Hotkey.IsEmpty);
-        Assert.True(s.FindMode("emoji")!.Hotkey.IsEmpty);
+        s.Normalize();
+        Assert.Equal("Ctrl+Alt+,", s.DictateHotkey.ToString());
+        Assert.Equal("Ctrl+Alt+.", s.NextModeHotkey.ToString());
+        Assert.Equal("Ctrl+Alt+-", s.PrevModeHotkey.ToString());
+        Assert.All(s.Modes, m => Assert.True(m.Hotkey.IsEmpty));
         Assert.True(s.Notes.Hotkey.IsEmpty);
-        Assert.Equal(3, s.BuildHotkeyBindings().Count(b => b.Combo.IsValid && b.Action != HotkeyAction.ToggleLibrary));
+        Assert.True(s.EditHotkey.IsEmpty);
+        Assert.False(s.VoiceKeywords);
         Assert.Empty(HotkeyConflicts.Find(s.BuildHotkeyBindings()));
     }
 }

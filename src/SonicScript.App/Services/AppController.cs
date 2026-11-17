@@ -56,6 +56,8 @@ public sealed class AppController : IDisposable
     private readonly TextInserter _inserter = new();
     private readonly RecordingIndicator _indicator = new();
     private readonly AudioDucker _ducker = new();
+    private ModeBadge? _badge;
+    private string _trayState = "idle";
     private TrayIcon? _tray;
 
     private ITranscriber? _transcriber;
@@ -177,15 +179,98 @@ public sealed class AppController : IDisposable
             case HotkeyEventKind.ToggleLibrary:
                 ToggleLibrary();
                 break;
+            case HotkeyEventKind.NextMode:
+                StepMode(+1);
+                break;
+            case HotkeyEventKind.PreviousMode:
+                StepMode(-1);
+                break;
         }
     }
 
-    private ModeDefinition ResolveMode(HotkeyBinding binding, ForegroundInfo target, AppSettings s)
+    private ModeDefinition ResolveMode(HotkeyBinding binding, ForegroundInfo target, AppSettings s, CycleEntry? entry)
     {
-        if (binding.Action == HotkeyAction.Note) return s.FindMode(s.Notes.ModeId) ?? s.DefaultMode;
-        if (binding.Action == HotkeyAction.EditSelection) return DictationPipeline.EditMode;
+        if (binding.Action == HotkeyAction.Note || entry?.Kind == CycleKind.Note) return s.FindMode(s.Notes.ModeId) ?? s.DefaultMode;
+        if (binding.Action == HotkeyAction.EditSelection || entry?.Kind == CycleKind.Edit) return DictationPipeline.EditMode;
         if (binding.ModeId is not null && s.FindMode(binding.ModeId) is { } m) return m;
-        return s.FindMode(AppRuleResolver.ResolveModeId(s, target.App)) ?? s.DefaultMode;
+        if (s.AppRulesSelectMode && AppRuleResolver.Match(s.AppRules, target.App) is { } rule && s.FindMode(rule.ModeId) is { } ruleMode)
+            return ruleMode;
+        return entry?.Mode ?? s.DefaultMode;
+    }
+
+    /// <summary>Diktat-Taste ohne festen Modus → aktuell gewählter Eintrag des Moduswechsels.</summary>
+    private static CycleEntry? EntryFor(HotkeyBinding binding, AppSettings s) =>
+        binding.Action == HotkeyAction.Dictate && binding.ModeId is null ? s.CurrentEntry : null;
+
+    /// <summary>Moduswechsel per Taste oder Abzeichen.</summary>
+    public void StepMode(int direction)
+    {
+        var entry = Settings.StepMode(direction);
+        SaveQuietly();
+        RefreshModeDisplay();
+        if (_badge is null || !_badge.IsVisible) Toast.Show(Strings.Format("toast.mode", entry.Name));
+        RebuildTrayMenu();
+    }
+
+    public void SelectMode(string id)
+    {
+        Settings.CurrentModeId = id;
+        Settings.Normalize();
+        SaveQuietly();
+        RefreshModeDisplay();
+        RebuildTrayMenu();
+    }
+
+    private void SaveQuietly()
+    {
+        try { _settingsStore.Save(Settings); }
+        catch (Exception ex) { Log.Error("Save settings", ex); }
+    }
+
+    /// <summary>Tray-Symbol, Tooltip und Abzeichen auf den aktuellen Modus/Zustand bringen.</summary>
+    private void RefreshModeDisplay()
+    {
+        var entry = Settings.CurrentEntry;
+        if (_tray is not null)
+        {
+            try { _tray.Icon = ModeIcons.Get(entry.Symbol, _trayState); }
+            catch (Exception ex) { Log.Error("Tray icon", ex); _tray.Icon = LoadIcon(_trayState); }
+            _tray.ToolTipText = Strings.Format("tray.tooltip_mode", entry.Name, Controls.HotkeyBox.Display(Settings.DictateHotkey));
+        }
+        _badge?.Update(entry, _trayState);
+    }
+
+    private void UpdateBadgeVisibility()
+    {
+        if (Settings.ShowModeBadge)
+        {
+            if (_badge is null)
+            {
+                _badge = new ModeBadge();
+                _badge.NextClicked += () => StepMode(+1);
+                _badge.PreviousClicked += () => StepMode(-1);
+                _badge.Moved += p => { Settings.ModeBadgeX = p.X; Settings.ModeBadgeY = p.Y; ScheduleSave(); };
+                _badge.Place(Settings.ModeBadgeX, Settings.ModeBadgeY);
+                _badge.Show();
+            }
+            RefreshModeDisplay();
+        }
+        else
+        {
+            _badge?.Close();
+            _badge = null;
+        }
+    }
+
+    private CancellationTokenSource? _saveDelay;
+
+    /// <summary>Position des Abzeichens erst nach dem Ziehen speichern.</summary>
+    private void ScheduleSave()
+    {
+        _saveDelay?.Cancel();
+        _saveDelay = new CancellationTokenSource();
+        var token = _saveDelay.Token;
+        _ = Task.Delay(800, token).ContinueWith(t => { if (!t.IsCanceled) Dispatcher.UIThread.Post(SaveQuietly); }, TaskScheduler.Default);
     }
 
     private void StartRecording(HotkeyBinding binding)
@@ -197,7 +282,8 @@ public sealed class AppController : IDisposable
         }
 
         var settings = Settings;
-        var isNote = binding.Action == HotkeyAction.Note;
+        var entry = EntryFor(binding, settings);
+        var isNote = binding.Action == HotkeyAction.Note || entry?.Kind == CycleKind.Note;
         if (isNote && string.IsNullOrWhiteSpace(settings.Notes.Folder))
         {
             _hook.Matcher?.EndSession();
@@ -217,9 +303,9 @@ public sealed class AppController : IDisposable
         var session = new Session
         {
             Binding = binding,
-            Mode = ResolveMode(binding, target, settings),
+            Mode = ResolveMode(binding, target, settings, entry),
             IsNote = isNote,
-            IsEdit = binding.Action == HotkeyAction.EditSelection,
+            IsEdit = binding.Action == HotkeyAction.EditSelection || entry?.Kind == CycleKind.Edit,
             Context = FocusContextReader.CaptureAsync(TimeSpan.FromMilliseconds(600)),
             Target = target,
             AudioPath = Path.Combine(AppPaths.Recordings, $"rec-{Guid.NewGuid():N}.wav"),
@@ -270,7 +356,7 @@ public sealed class AppController : IDisposable
     {
         if (_recording is not { } s || s.IsNote) return;
         s.Binding = binding;
-        s.Mode = ResolveMode(binding, s.Target, s.Settings);
+        s.Mode = ResolveMode(binding, s.Target, s.Settings, EntryFor(binding, s.Settings));
         if (s.Settings.ShowRecordingIndicator) _indicator.ShowRecording(s.Mode, false);
     }
 
@@ -577,6 +663,8 @@ public sealed class AppController : IDisposable
         History.Prune(updated.History.MaxEntries, updated.History.MaxAgeDays);
         if (!updated.History.Enabled) History.Clear();
         PreloadTranscriber();
+        UpdateBadgeVisibility();
+        RefreshModeDisplay();
         RebuildTrayMenu();
         _library?.ApplySettings(updated);
     }
@@ -641,6 +729,8 @@ public sealed class AppController : IDisposable
         _tray = new TrayIcon { Icon = LoadIcon("idle"), IsVisible = true };
         _tray.Clicked += (_, _) => ShowMainWindow();
         TrayIcon.SetIcons(Application.Current!, [_tray]);
+        RefreshModeDisplay();
+        UpdateBadgeVisibility();
         RebuildTrayMenu();
     }
 
@@ -649,15 +739,32 @@ public sealed class AppController : IDisposable
 
     private void SetTrayState(string state)
     {
-        if (_tray is not null) _tray.Icon = LoadIcon(state);
+        _trayState = state;
+        RefreshModeDisplay();
     }
 
     private void RebuildTrayMenu()
     {
         if (_tray is null) return;
-        _tray.ToolTipText = Strings.Format("tray.tooltip", Settings.DictateHotkey);
 
         var menu = new NativeMenu();
+
+        // Moduswahl direkt im Tray
+        var current = Settings.CurrentEntry;
+        var modeMenu = new NativeMenuItem($"{Strings.Get("tray.mode")}: {current.Symbol} {current.Name}") { Menu = new NativeMenu() };
+        foreach (var e in Settings.BuildCycle())
+        {
+            var id = e.Id;
+            var item = new NativeMenuItem($"{e.Symbol}  {e.Name}")
+            {
+                ToggleType = NativeMenuItemToggleType.Radio,
+                IsChecked = e.Id == current.Id,
+            };
+            item.Click += (_, _) => SelectMode(id);
+            modeMenu.Menu.Add(item);
+        }
+        menu.Add(modeMenu);
+        menu.Add(new NativeMenuItemSeparator());
 
         var copyLast = new NativeMenuItem(Strings.Get("tray.copy_last")) { IsEnabled = _last is not null };
         copyLast.Click += async (_, _) =>
@@ -826,6 +933,7 @@ public sealed class AppController : IDisposable
         _recorder.Dispose();
         (_transcriber as IDisposable)?.Dispose();
         _tray?.Dispose();
+        _badge?.Close();
         Http.Dispose();
     }
 }
