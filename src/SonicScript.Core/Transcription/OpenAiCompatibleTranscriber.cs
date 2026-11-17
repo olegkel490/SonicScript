@@ -28,23 +28,64 @@ public sealed class OpenAiCompatibleTranscriber : ITranscriber
 
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(90);
 
+    /// <summary>OpenRouter erwartet JSON mit Base64-Audio (<c>input_audio</c>), nicht OpenAIs Multipart-Upload.</summary>
+    public bool UsesJsonBody => IsOpenRouter(_baseUrl);
+
+    internal static bool IsOpenRouter(string baseUrl) =>
+        Uri.TryCreate(baseUrl, UriKind.Absolute, out var u) &&
+        (u.Host.Equals("openrouter.ai", StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith(".openrouter.ai", StringComparison.OrdinalIgnoreCase));
+
     public async Task<TranscriptionResult> TranscribeAsync(TranscriptionRequest request, CancellationToken ct)
     {
-        using var form = new MultipartFormDataContent();
-        await using var audio = new FileStream(request.AudioPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true);
-        var file = new StreamContent(audio);
-        file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
-        form.Add(file, "file", "audio.wav");
-        form.Add(new StringContent(_model), "model");
-        form.Add(new StringContent("json"), "response_format");
-        if (!string.IsNullOrWhiteSpace(request.Prompt)) form.Add(new StringContent(request.Prompt), "prompt");
-        if (!string.IsNullOrWhiteSpace(request.Language) && request.Language != "auto")
-            form.Add(new StringContent(request.Language), "language");
-
-        using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/audio/transcriptions") { Content = form };
+        var audio = await File.ReadAllBytesAsync(request.AudioPath, ct).ConfigureAwait(false);
+        using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/audio/transcriptions")
+        {
+            Content = UsesJsonBody ? BuildJsonBody(audio, _model, request) : BuildMultipartBody(audio, _model, request),
+        };
         Http.ApplyCommonHeaders(req, _apiKey);
         var body = await Http.SendAsync(_http, req, Timeout, ct).ConfigureAwait(false);
         return Parse(body);
+    }
+
+    /// <summary>OpenRouter: <c>{"model": …, "input_audio": {"data": base64, "format": "wav"}, "language": …}</c>.</summary>
+    internal static HttpContent BuildJsonBody(byte[] audio, string model, TranscriptionRequest request)
+    {
+        var payload = new Dictionary<string, object>
+        {
+            ["model"] = model,
+            ["input_audio"] = new Dictionary<string, string> { ["data"] = Convert.ToBase64String(audio), ["format"] = "wav" },
+        };
+        if (!string.IsNullOrWhiteSpace(request.Language) && request.Language != "auto") payload["language"] = request.Language;
+        return new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+    }
+
+    /// <summary>
+    /// OpenAI-Stil-Multipart, mit konservativen Headern: Feldnamen in Anführungszeichen, kein <c>filename*</c>,
+    /// Boundary ohne Anführungszeichen – manche Server-Parser lehnen die .NET-Standardform sonst ab.
+    /// </summary>
+    internal static HttpContent BuildMultipartBody(byte[] audio, string model, TranscriptionRequest request)
+    {
+        var boundary = "----SonicScript" + Guid.NewGuid().ToString("N");
+        var form = new MultipartFormDataContent(boundary);
+        form.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data; boundary=" + boundary);
+
+        var file = new ByteArrayContent(audio);
+        file.Headers.ContentType = new MediaTypeHeaderValue("audio/wav");
+        file.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = "\"file\"", FileName = "\"audio.wav\"" };
+        form.Add(file);
+
+        void Field(string name, string value)
+        {
+            var c = new StringContent(value);
+            c.Headers.ContentType = null;
+            c.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = $"\"{name}\"" };
+            form.Add(c);
+        }
+        Field("model", model);
+        Field("response_format", "json");
+        if (!string.IsNullOrWhiteSpace(request.Prompt)) Field("prompt", request.Prompt);
+        if (!string.IsNullOrWhiteSpace(request.Language) && request.Language != "auto") Field("language", request.Language);
+        return form;
     }
 
     internal static TranscriptionResult Parse(string body)

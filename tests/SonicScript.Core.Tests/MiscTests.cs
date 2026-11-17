@@ -143,3 +143,64 @@ public class ChatClientTests
         Assert.Throws<RemoteServiceException>(() =>
             new SonicScript.Core.LanguageModel.OpenAiCompatibleChatClient(new HttpClient(), "http://example.com/v1", "m", "secret"));
 }
+
+public class CloudTranscriptionRequestTests
+{
+    private sealed class CaptureHandler : HttpMessageHandler
+    {
+        public string? ContentType;
+        public string? Body;
+        public Uri? Uri;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Uri = request.RequestUri;
+            ContentType = request.Content?.Headers.ContentType?.ToString();
+            Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{\"text\":\"Hallo Welt\"}") };
+        }
+    }
+
+    private static string Wav()
+    {
+        var p = Path.Combine(Path.GetTempPath(), $"ss-{Guid.NewGuid():N}.wav");
+        SonicScript.Core.Audio.WavFile.WriteNoise(p, TimeSpan.FromMilliseconds(200));
+        return p;
+    }
+
+    [Fact]
+    public async Task OpenRouterGetsJsonWithBase64Audio()
+    {
+        var h = new CaptureHandler();
+        var t = new OpenAiCompatibleTranscriber(new HttpClient(h), "https://openrouter.ai/api/v1", "openai/whisper-large-v3", "key");
+        var wav = Wav();
+        var r = await t.TranscribeAsync(new TranscriptionRequest(wav, "de", "SonicScript"), default);
+        File.Delete(wav);
+
+        Assert.Equal("Hallo Welt", r.Text);
+        Assert.Equal("https://openrouter.ai/api/v1/audio/transcriptions", h.Uri!.ToString());
+        Assert.StartsWith("application/json", h.ContentType);
+        using var doc = System.Text.Json.JsonDocument.Parse(h.Body!);
+        Assert.Equal("openai/whisper-large-v3", doc.RootElement.GetProperty("model").GetString());
+        Assert.Equal("wav", doc.RootElement.GetProperty("input_audio").GetProperty("format").GetString());
+        var data = Convert.FromBase64String(doc.RootElement.GetProperty("input_audio").GetProperty("data").GetString()!);
+        Assert.Equal("RIFF"u8.ToArray(), data[..4]);
+        Assert.Equal("de", doc.RootElement.GetProperty("language").GetString());
+    }
+
+    [Fact]
+    public async Task OthersGetCleanMultipart()
+    {
+        var h = new CaptureHandler();
+        var t = new OpenAiCompatibleTranscriber(new HttpClient(h), "https://api.openai.com/v1", "whisper-1", "key");
+        var wav = Wav();
+        await t.TranscribeAsync(new TranscriptionRequest(wav, null, null), default);
+        File.Delete(wav);
+
+        Assert.StartsWith("multipart/form-data; boundary=----SonicScript", h.ContentType);
+        Assert.DoesNotContain("boundary=\"", h.ContentType);
+        Assert.Contains("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"", h.Body);
+        Assert.Contains("name=\"model\"", h.Body);
+        Assert.DoesNotContain("filename*", h.Body);
+        Assert.DoesNotContain("name=\"language\"", h.Body);
+    }
+}
