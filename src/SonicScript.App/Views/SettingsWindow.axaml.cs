@@ -65,6 +65,56 @@ public sealed partial class SettingsWindow : Window
     {
         FillCombo(Get<ComboBox>("UiLanguage"), Choices.UiLanguages, v => Strings.Get("enum.UiLanguage." + v), _s.UiLanguage, v => _s.UiLanguage = v);
         Get<TextBlock>("About").Text = Strings.Format("settings.about", AppController.CurrentVersion.ToString(3));
+        Get<Button>("ExportSettings").Click += async (_, _) => await ExportSettingsAsync();
+        Get<Button>("ImportSettings").Click += async (_, _) => await ImportSettingsAsync();
+    }
+
+    private static readonly FilePickerFileType JsonFiles = new("SonicScript (*.json)") { Patterns = ["*.json"] };
+
+    private async Task ExportSettingsAsync()
+    {
+        var status = Get<TextBlock>("TransferStatus");
+        try
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                SuggestedFileName = $"SonicScript-Einstellungen-{DateTime.Now:yyyy-MM-dd}.json",
+                DefaultExtension = "json",
+                FileTypeChoices = [JsonFiles],
+            });
+            if (file?.TryGetLocalPath() is not { } path) return;
+            // Gespeicherter Stand (nicht ungespeicherte Änderungen in diesem Fenster).
+            await File.WriteAllTextAsync(path, SettingsTransfer.Export(_app.CloneSettings(), AppController.CurrentVersion.ToString(3)));
+            status.Text = Strings.Format("settings.transfer.exported", path);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Export settings", ex);
+            status.Text = Strings.Format("settings.transfer.failed", ex.Message);
+        }
+    }
+
+    private async Task ImportSettingsAsync()
+    {
+        var status = Get<TextBlock>("TransferStatus");
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { AllowMultiple = false, FileTypeFilter = [JsonFiles] });
+            if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
+            var imported = SettingsTransfer.Import(await File.ReadAllTextAsync(path), _app.CloneSettings());
+            _app.ApplySettings(imported);
+            Toast.Show(Strings.Get("settings.transfer.imported"));
+            Close();
+        }
+        catch (FormatException)
+        {
+            status.Text = Strings.Get("settings.transfer.invalid");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Import settings", ex);
+            status.Text = Strings.Format("settings.transfer.failed", ex.Message);
+        }
     }
 
     private void SetupDictation()

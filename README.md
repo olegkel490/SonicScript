@@ -27,7 +27,7 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
 
-Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Absätzen und Listen) → **Mail** (geglättet und als E-Mail formatiert: Anrede, Absätze, Aufzählungen, Gruß) → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
+Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Absätzen und Listen) → **Mail** (geglättet und als E-Mail formatiert: Anrede, Absätze, Aufzählungen, Gruß) → **Mail EN** (dasselbe, aber die E-Mail auf Englisch) → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
 (markierten Text per Sprache ändern) → **Notiz** (ablegen statt einfügen). Welche Modi dabei sind, legst du in den
 Einstellungen fest; eigene Modi kommen automatisch dazu.
 
@@ -69,6 +69,10 @@ Antwortentwürfe.
   - Filter für Whisper-Halluzinationen („Untertitel im Auftrag des ZDF“).
   - Gesprochene Uhrzeiten („sechzehn Uhr fünfundvierzig bis siebzehn Uhr fünf“ → „16:45 bis 17:05 Uhr“).
   - Wörterbuch mit Begriffen und festen Ersetzungen („n acht n“ → „n8n“).
+  - Stille abschneiden: Stille am Anfang/Ende fällt weg, lange Pausen werden gekürzt. Schneller und weniger
+    erfundene Sätze; reine Stille wird gar nicht erst erkannt (abschaltbar).
+- **Einstellungen sichern/übertragen:** Export und Import unter *Allgemein*. Modi, Tasten, App-Regeln, Wörterbuch
+  und Anbieter wandern mit; API-Schlüssel, Mikrofon und lokales Modell bleiben am jeweiligen PC.
 - **Nichts geht verloren:** Schlägt die Transkription fehl, bleibt die Aufnahme 24 Stunden erhalten. Sie lässt
   sich über das Tray-Menü neu transkribieren. Im Tray-Menü gibt es außerdem „Letzten Text kopieren“ und
   „Wortgetreu statt KI-Text“.

@@ -145,7 +145,7 @@ public class SettingsTests
         using var dir = new TempDir();
         var store = new SettingsStore(Path.Combine(dir.Path, "settings.json"));
         var s = store.Load();
-        Assert.Equal(7, s.Modes.Count);
+        Assert.Equal(8, s.Modes.Count);
 
         s.Modes.RemoveAll(m => m.Id == BuiltInModes.EmojiId);
         s.Modes.Add(new ModeDefinition { Name = "Übersetzen", Instruction = "Ins Englische", Hotkey = KeyCombo.Parse("Ctrl+Alt+T") });
@@ -159,7 +159,7 @@ public class SettingsTests
         Assert.Contains("\"type\"", json);
 
         var loaded = store.Load();
-        Assert.Equal(8, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
+        Assert.Equal(9, loaded.Modes.Count);                  // Emoji wieder ergänzt + eigener Modus
         Assert.Equal(BuiltInModes.VerbatimId, loaded.DefaultModeId);
         Assert.Equal(1000, loaded.History.MaxEntries);
         Assert.Equal(InsertionMethod.Type, loaded.AppRules.Last().Insertion);

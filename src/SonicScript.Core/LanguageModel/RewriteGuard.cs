@@ -48,7 +48,7 @@ public static partial class RewriteGuard
         // Prompts dürfen strukturierter (länger) werden als das Diktat.
         if (kind is not (ModeKind.Custom or ModeKind.Prompt) && cleanedOutput.Length > input.Length * 3 + 300) return RewriteVerdict.TooLong;
         // Bei Übersetzungen ist "I can't …" oft eine korrekte Übersetzung, keine Verweigerung.
-        if (kind is not (ModeKind.Custom or ModeKind.Translate or ModeKind.Prompt) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
+        if (kind is not (ModeKind.Custom or ModeKind.Translate or ModeKind.Prompt or ModeKind.MailEnglish) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
             return RewriteVerdict.LooksLikeAnswer;
         return RewriteVerdict.Ok;
     }

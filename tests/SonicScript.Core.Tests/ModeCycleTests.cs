@@ -10,7 +10,7 @@ public class ModeCycleTests
     {
         var s = new AppSettings();
         var ids = s.BuildCycle().Select(e => e.Id).ToList();
-        Assert.Equal(["verbatim", "improve", "mail", "calm", "emoji", "translate", "prompt", AppSettings.EditEntryId, AppSettings.NoteEntryId], ids);
+        Assert.Equal(["verbatim", "improve", "mail", "mail-en", "calm", "emoji", "translate", "prompt", AppSettings.EditEntryId, AppSettings.NoteEntryId], ids);
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class ModeCycleTests
     {
         var s = new AppSettings { EditInCycle = false, NoteInCycle = false };
         foreach (var m in s.Modes.Where(m => m.Id is "calm" or "emoji")) m.InCycle = false;
-        Assert.Equal(["verbatim", "improve", "mail", "translate", "prompt"], s.BuildCycle().Select(e => e.Id));
+        Assert.Equal(["verbatim", "improve", "mail", "mail-en", "translate", "prompt"], s.BuildCycle().Select(e => e.Id));
 
         s.CurrentModeId = "calm";       // nicht mehr im Wechsel
         s.Normalize();

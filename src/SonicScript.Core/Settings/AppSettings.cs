@@ -46,6 +46,9 @@ public sealed class AppSettings
     /// <summary>Kurzer Ton bei Start und Ende einer Aufnahme.</summary>
     public bool PlaySounds { get; set; } = true;
 
+    /// <summary>Stille am Anfang/Ende abschneiden und lange Pausen kürzen, bevor erkannt wird.</summary>
+    public bool TrimSilence { get; set; } = true;
+
     /// <summary>Andere Audioquellen (Musik, Videos) während der Aufnahme leiser stellen.</summary>
     public bool DuckOtherAudio { get; set; } = true;
 
