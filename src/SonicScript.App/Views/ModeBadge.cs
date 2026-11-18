@@ -84,7 +84,8 @@ public sealed class ModeBadge : Window
         {
             if (OperatingSystem.IsWindows())
             {
-                try { _watcher = new Taskbar.ForegroundWatcher(OnForegroundChanged); }
+                // Opened kommt nach jedem Hide/Show erneut (Vollbild) – nur einen Watcher anlegen.
+                try { _watcher ??= new Taskbar.ForegroundWatcher(OnForegroundChanged); }
                 catch (Exception ex) { Log.Error("Mode badge watcher", ex); }
             }
             Relayout();
@@ -94,6 +95,7 @@ public sealed class ModeBadge : Window
         {
             _timer.Stop();
             _watcher?.Dispose();
+            _watcher = null;
         };
     }
 
