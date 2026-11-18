@@ -3,12 +3,11 @@
         x:Class="SonicScript.App.Views.Toast"
         SystemDecorations="None" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
         CanResize="False" SizeToContent="WidthAndHeight" MaxWidth="420"
-        Background="Transparent" TransparencyLevelHint="Transparent"
         Title="SonicScript">
-  <Border x:Name="Box" CornerRadius="10" Padding="14,10" Background="#F21E1B2E" BorderThickness="1" BorderBrush="#5538BDF8">
+  <Border x:Name="Box" Padding="14,10">
     <StackPanel Orientation="Horizontal" Spacing="10">
       <Image Source="avares://SonicScript/Assets/tray-idle.png" Width="20" Height="20" VerticalAlignment="Top" />
-      <TextBlock x:Name="Message" Foreground="White" TextWrapping="Wrap" MaxWidth="360" FontSize="13" />
+      <TextBlock x:Name="Message" TextWrapping="Wrap" MaxWidth="360" FontSize="13" />
     </StackPanel>
   </Border>
 </Window>

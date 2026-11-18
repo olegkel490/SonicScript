@@ -31,9 +31,10 @@ Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Abs�
 (markierten Text per Sprache ändern) → **Notiz** (ablegen statt einfügen). Welche Modi dabei sind, legst du in den
 Einstellungen fest; eigene Modi kommen automatisch dazu.
 
-**Immer sichtbar:** Das Tray-Symbol zeigt das Kürzel des aktuellen Modus (blau = bereit, rot = Aufnahme,
-gelb = Verarbeitung). Zusätzlich sitzt unten rechts ein kleines, verschiebbares **Modus-Abzeichen** mit ‹ › zum
-Wechseln per Klick (abschaltbar). Im Tray-Menü lässt sich der Modus auch direkt wählen.
+**Immer sichtbar:** Der aktuelle Modus steht als kleines Feld **in der Taskleiste**, links neben dem Infobereich.
+Ein Klick schaltet weiter, ein Rechtsklick zurück, das Mausrad blättert. Bei Aufnahme leuchtet ein roter Punkt. Beim
+Wechseln per Taste erscheint unten mittig kurz eine **Einblendung** mit Modus, Tasten und Position in der Liste.
+Bei Vollbild-Apps (Video, Präsentation) blendet sich das Feld aus. Auch das Tray-Symbol zeigt das Modus-Kürzel.
 
 Optional: Sprachbefehle am Anfang („Prompt: …“, „Notiz: …“) und App-Regeln, die den Modus wählen (z. B. Prompt in
 ChatGPT) – beides in den Einstellungen einschaltbar.

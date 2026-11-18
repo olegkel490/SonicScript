@@ -57,6 +57,7 @@ public sealed class AppController : IDisposable
     private readonly RecordingIndicator _indicator = new();
     private readonly AudioDucker _ducker = new();
     private ModeBadge? _badge;
+    private ModeSwitchOsd? _osd;
     private string _trayState = "idle";
     private TrayIcon? _tray;
 
@@ -208,8 +209,24 @@ public sealed class AppController : IDisposable
         var entry = Settings.StepMode(direction);
         SaveQuietly();
         RefreshModeDisplay();
-        if (_badge is null || !_badge.IsVisible) Toast.Show(Strings.Format("toast.mode", entry.Name));
+        ShowModeSwitch(entry);
         RebuildTrayMenu();
+    }
+
+    /// <summary>Kurze Einblendung beim Wechsel (Variante C).</summary>
+    private void ShowModeSwitch(CycleEntry entry)
+    {
+        try
+        {
+            _osd ??= new ModeSwitchOsd();
+            _osd.ShowEntry(entry, Settings.BuildCycle(),
+                Controls.HotkeyBox.Display(Settings.NextModeHotkey), Controls.HotkeyBox.Display(Settings.PrevModeHotkey));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Mode OSD", ex);
+            Toast.Show(Strings.Format("toast.mode", entry.Name));
+        }
     }
 
     public void SelectMode(string id)
@@ -249,8 +266,7 @@ public sealed class AppController : IDisposable
                 _badge = new ModeBadge();
                 _badge.NextClicked += () => StepMode(+1);
                 _badge.PreviousClicked += () => StepMode(-1);
-                _badge.Moved += p => { Settings.ModeBadgeX = p.X; Settings.ModeBadgeY = p.Y; ScheduleSave(); };
-                _badge.Place(Settings.ModeBadgeX, Settings.ModeBadgeY);
+                _badge.Update(Settings.CurrentEntry, _trayState);
                 _badge.Show();
             }
             RefreshModeDisplay();
@@ -258,20 +274,11 @@ public sealed class AppController : IDisposable
         else
         {
             _badge?.Close();
+        _osd?.Close();
             _badge = null;
         }
     }
 
-    private CancellationTokenSource? _saveDelay;
-
-    /// <summary>Position des Abzeichens erst nach dem Ziehen speichern.</summary>
-    private void ScheduleSave()
-    {
-        _saveDelay?.Cancel();
-        _saveDelay = new CancellationTokenSource();
-        var token = _saveDelay.Token;
-        _ = Task.Delay(800, token).ContinueWith(t => { if (!t.IsCanceled) Dispatcher.UIThread.Post(SaveQuietly); }, TaskScheduler.Default);
-    }
 
     private void StartRecording(HotkeyBinding binding)
     {
