@@ -47,8 +47,13 @@ public static class PromptBuilder
     public static string DefaultInstruction(ModeKind kind, bool de) => kind switch
     {
         ModeKind.Improve => de
-            ? "Mache daraus sauberen Schrifttext: Rechtschreibung, Grammatik und Zeichensetzung korrigieren, Füllwörter (äh, ähm, also, halt) und Wiederholungen streichen, Selbstkorrekturen des Sprechers übernehmen. Inhalt, Tonfall und Sprache bleiben gleich. Nichts hinzufügen. Absätze nur, wenn der Text lang ist."
-            : "Turn this into clean written text: fix spelling, grammar and punctuation, remove filler words and repetitions, apply the speaker's self-corrections. Keep meaning, tone and language. Add nothing. Use paragraphs only for long text.",
+            ? "Mache daraus sauberen Schrifttext: Rechtschreibung, Grammatik und Zeichensetzung korrigieren, Füllwörter (äh, ähm, also, halt) und Wiederholungen streichen, Selbstkorrekturen des Sprechers übernehmen. Inhalt, Tonfall und Sprache bleiben gleich. Nichts hinzufügen. " + FormattingDe
+            : "Turn this into clean written text: fix spelling, grammar and punctuation, remove filler words and repetitions, apply the speaker's self-corrections. Keep meaning, tone and language. Add nothing. " + FormattingEn,
+        ModeKind.Mail => de
+            ? "Mache aus dem Diktat eine fertige E-Mail. Glätte den Text wie ein Lektor: Rechtschreibung, Grammatik und Zeichensetzung korrigieren, Füllwörter, Wiederholungen und Versprecher streichen, Selbstkorrekturen übernehmen, holprige Sätze flüssig formulieren. Inhalt, Tonfall, Du/Sie und Sprache bleiben, nichts erfinden.\n" +
+              "Format:\n- Anrede in eigener Zeile, mit Komma (aus dem Diktat übernehmen, sonst „Hallo,“), danach eine Leerzeile.\n- Inhalt in kurzen Absätzen (2–4 Sätze, ein Gedanke pro Absatz), getrennt durch Leerzeilen.\n- Mehrere Punkte, Fragen, Termine oder Schritte als Aufzählung mit „- “.\n- Am Ende eine Leerzeile und eine kurze Grußformel in eigener Zeile (aus dem Diktat, sonst „Viele Grüße“), ohne Namen, wenn keiner diktiert wurde.\n- Kein Betreff, keine Signatur, kein Markdown außer „- “ für Aufzählungen."
+            : "Turn the dictation into a finished e-mail. Polish it like an editor: fix spelling, grammar and punctuation, remove filler words, repetitions and slips, apply self-corrections, make clumsy sentences flow. Keep content, tone, formality and language; invent nothing.\n" +
+              "Format:\n- Greeting on its own line with a comma (from the dictation, otherwise \"Hi,\"), then a blank line.\n- Body in short paragraphs (2–4 sentences, one idea each), separated by blank lines.\n- Several points, questions, dates or steps as a list with \"- \".\n- At the end a blank line and a short sign-off on its own line (from the dictation, otherwise \"Best regards\"), without a name unless one was dictated.\n- No subject, no signature block, no Markdown except \"- \" for lists.",
         ModeKind.Calm => de
             ? "Der Sprecher ist verärgert. Finde sein eigentliches Anliegen und schreibe daraus eine ruhige, klare und bestimmte Nachricht, mit der er sein Ziel eher erreicht. Fakten, Fristen, Erwartungen und Dringlichkeit bleiben erhalten. Beleidigungen, Sarkasmus, Drohungen und Unterstellungen fallen weg. Schreibe aus seiner Sicht (Ich-Form), in seiner Sprache."
             : "The speaker is upset. Find what they actually want and write a calm, clear and firm message that helps them get it. Keep facts, deadlines, expectations and urgency. Drop insults, sarcasm, threats and accusations. Write from their perspective (first person), in their language.",
@@ -91,6 +96,12 @@ public static class PromptBuilder
 
     public static string BuildEditUserMessage(string selectedText, string instruction) =>
         $"{TextOpen}\n{selectedText}\n{TextClose}\n{InstructionOpen}\n{instruction}\n{InstructionClose}";
+
+    private const string FormattingDe =
+        "Gliedere den Text: Ab etwa drei Sätzen neuer Absatz bei jedem Themenwechsel (Absätze getrennt durch eine Leerzeile). Werden mehrere Punkte, Schritte oder Optionen aufgezählt, schreibe sie als Liste mit „- “ je Zeile. Kurze Texte bleiben ein Absatz. Kein weiteres Markdown.";
+
+    private const string FormattingEn =
+        "Structure the text: from about three sentences on, start a new paragraph at each topic change (paragraphs separated by a blank line). If several points, steps or options are listed, write them as a list with \"- \" per line. Short texts stay one paragraph. No other Markdown.";
 
     public static bool IsGerman(string? language) =>
         language is not null && language.StartsWith("de", StringComparison.OrdinalIgnoreCase);

@@ -18,6 +18,8 @@ public enum ModeKind
     Translate,
     /// <summary>Gesprochener Gedanke → klarer Prompt für ChatGPT, Claude, Cursor …</summary>
     Prompt,
+    /// <summary>Geglättetes Diktat als formatierte E-Mail (Anrede, Absätze, Gruß).</summary>
+    Mail,
 }
 
 public sealed class ModeDefinition
@@ -57,6 +59,7 @@ public static class BuiltInModes
     public const string EmojiId = "emoji";
     public const string TranslateId = "translate";
     public const string PromptId = "prompt";
+    public const string MailId = "mail";
 
     public static List<ModeDefinition> CreateDefaults() =>
     [
@@ -64,6 +67,8 @@ public static class BuiltInModes
                 Keywords = DefaultKeywords[VerbatimId] },
         new() { Id = ImproveId, Kind = ModeKind.Improve, Name = "SonicScript+", Symbol = "✎", Temperature = 0.3,
                 Keywords = DefaultKeywords[ImproveId] },
+        new() { Id = MailId, Kind = ModeKind.Mail, Name = "SonicScript Mail", Symbol = "@", Temperature = 0.3,
+                Keywords = DefaultKeywords[MailId] },
         new() { Id = CalmId, Kind = ModeKind.Calm, Name = "SonicScript $%&!", Symbol = "☯", Temperature = 0.4,
                 Keywords = DefaultKeywords[CalmId] },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
@@ -79,6 +84,7 @@ public static class BuiltInModes
     {
         [VerbatimId] = "Wörtlich, Wortgetreu, Verbatim",
         [ImproveId] = "Sauber, Plus, Clean",
+        [MailId] = "Mail, E-Mail, Email",
         [CalmId] = "Ruhig, Sachlich, Calm",
         [EmojiId] = "Emoji, Emojis",
         [TranslateId] = "Englisch, Auf Englisch, English, Übersetze, Übersetzen",

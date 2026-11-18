@@ -158,3 +158,54 @@ public class PromptModeTests
         Assert.Contains(s.AppRules, r => r.TitleContains == "ChatGPT" && r.ModeId == "prompt");
     }
 }
+
+public class MailModeTests
+{
+    [Fact]
+    public void MailModeIsBuiltInAfterImprove()
+    {
+        var s = new AppSettings();
+        var ids = s.Modes.Select(m => m.Id).ToList();
+        Assert.Equal(ids.IndexOf(BuiltInModes.ImproveId) + 1, ids.IndexOf(BuiltInModes.MailId));
+        var mail = s.FindMode(BuiltInModes.MailId)!;
+        Assert.Equal(ModeKind.Mail, mail.Kind);
+        Assert.Equal("@", mail.Symbol);
+    }
+
+    [Theory]
+    [InlineData("de", "Anrede in eigener Zeile", "Füllwörter")]
+    [InlineData("en", "Greeting on its own line", "filler words")]
+    public void MailPromptSmoothsAndFormats(string lang, string format, string smooth)
+    {
+        var p = PromptBuilder.BuildSystemPrompt(new AppSettings().FindMode(BuiltInModes.MailId)!, lang, []);
+        Assert.Contains(format, p);
+        Assert.Contains(smooth, p);
+        Assert.Contains("- ", p);
+    }
+
+    [Fact]
+    public void ImprovePromptNowAsksForParagraphsAndLists()
+    {
+        var p = PromptBuilder.BuildSystemPrompt(new AppSettings().FindMode(BuiltInModes.ImproveId)!, "de", []);
+        Assert.Contains("neuer Absatz", p);
+        Assert.Contains("Liste", p);
+    }
+
+    [Fact]
+    public void ExistingUsersGetMailMode()
+    {
+        using var dir = new TempDir();
+        var path = Path.Combine(dir.Path, "settings.json");
+        File.WriteAllText(path, """{ "schemaVersion": 5, "modes": [ { "id": "verbatim", "kind": "verbatim", "name": "A" }, { "id": "improve", "kind": "improve", "name": "B" } ] }""");
+        var s = new SettingsStore(path).Load();
+        Assert.NotNull(s.FindMode(BuiltInModes.MailId));
+        Assert.Contains(s.BuildCycle(), e => e.Id == BuiltInModes.MailId);
+    }
+
+    [Theory]
+    [InlineData("a\nb", "a\r\nb")]
+    [InlineData("a\r\nb\n\nc", "a\r\nb\r\n\r\nc")]
+    [InlineData("a\rb", "a\r\nb")]
+    public void ConvertsToWindowsNewlines(string input, string expected) =>
+        Assert.Equal(expected, SonicScript.Core.Text.Newlines.ToWindows(input));
+}
