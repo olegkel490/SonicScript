@@ -46,9 +46,16 @@ public sealed class TranscriptionFailedException(string message, Exception inner
 public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? chat)
 {
     /// <param name="allowKeywords">Sprachbefehle am Anfang auswerten (nur beim normalen Diktat).</param>
-    public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false)
+    public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false, string? replyTo = null)
     {
         var tr = await TranscribeAsync(audioPath, settings, ct).ConfigureAwait(false);
+        return await RunTranscriptAsync(tr, mode, settings, ct, allowKeywords, replyTo).ConfigureAwait(false);
+    }
+
+    /// <summary>Wie <see cref="RunAsync"/>, aber mit bereits erkanntem Text (z. B. aus der Live-Erkennung). null = Stille.</summary>
+    /// <param name="replyTo">Für den Antwort-Modus: die E-Mail, auf die geantwortet wird (null = wie Mail-Modus).</param>
+    public async Task<DictationResult> RunTranscriptAsync(TranscriptionResult? tr, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false, string? replyTo = null)
+    {
         if (tr is null) return new DictationResult("", "", null, mode, DictationWarning.None, null); // nur Stille
 
         var language = tr.Language ?? (settings.Transcription.Language == "auto" ? null : settings.Transcription.Language);
@@ -57,13 +64,13 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
 
         if (allowKeywords && settings.VoiceKeywords && ModeKeywords.Detect(verbatim, settings) is { } kw)
         {
-            var r = await RewriteAsync(kw.Rest, language, kw.Mode, settings, dictionary, ct).ConfigureAwait(false);
+            var r = await RewriteAsync(kw.Rest, language, kw.Mode, settings, dictionary, ct, replyTo).ConfigureAwait(false);
             return r with { SaveAsNote = kw.IsNote, Keyword = kw.Keyword };
         }
-        return await RewriteAsync(verbatim, language, mode, settings, dictionary, ct).ConfigureAwait(false);
+        return await RewriteAsync(verbatim, language, mode, settings, dictionary, ct, replyTo).ConfigureAwait(false);
     }
 
-    private async Task<DictationResult> RewriteAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, DictionaryApplier dictionary, CancellationToken ct)
+    private async Task<DictationResult> RewriteAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, DictionaryApplier dictionary, CancellationToken ct, string? replyTo = null)
     {
         if (verbatim.Length == 0 || !mode.NeedsLanguageModel)
             return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.None, null);
@@ -74,8 +81,12 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         string raw;
         try
         {
-            var system = PromptBuilder.BuildSystemPrompt(mode, language, settings.Dictionary.Terms);
-            raw = await chat.CompleteAsync(system, PromptBuilder.BuildUserMessage(verbatim), mode.Temperature, ct).ConfigureAwait(false);
+            var reply = mode.Kind == ModeKind.Reply && !string.IsNullOrWhiteSpace(replyTo);
+            var system = reply
+                ? PromptBuilder.BuildReplySystemPrompt(mode, language, settings.Dictionary.Terms)
+                : PromptBuilder.BuildSystemPrompt(mode, language, settings.Dictionary.Terms);
+            var user = reply ? PromptBuilder.BuildReplyUserMessage(replyTo!, verbatim) : PromptBuilder.BuildUserMessage(verbatim);
+            raw = await chat.CompleteAsync(system, user, mode.Temperature, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -100,8 +111,13 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
     /// </summary>
     public async Task<DictationResult> RunEditAsync(string audioPath, string selectedText, AppSettings settings, CancellationToken ct)
     {
-        var mode = EditMode;
         var tr = await TranscribeAsync(audioPath, settings, ct).ConfigureAwait(false);
+        return await RunEditTranscriptAsync(tr, selectedText, settings, ct).ConfigureAwait(false);
+    }
+
+    public async Task<DictationResult> RunEditTranscriptAsync(TranscriptionResult? tr, string selectedText, AppSettings settings, CancellationToken ct)
+    {
+        var mode = EditMode;
         if (tr is null) return new DictationResult("", "", null, mode, DictationWarning.None, null);
 
         var language = tr.Language ?? (settings.Transcription.Language == "auto" ? null : settings.Transcription.Language);

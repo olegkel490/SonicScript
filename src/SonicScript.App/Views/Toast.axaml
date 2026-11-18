@@ -7,7 +7,13 @@
   <Border x:Name="Box" Padding="14,10">
     <StackPanel Orientation="Horizontal" Spacing="10">
       <Image Source="avares://SonicScript/Assets/tray-idle.png" Width="20" Height="20" VerticalAlignment="Top" />
-      <TextBlock x:Name="Message" TextWrapping="Wrap" MaxWidth="360" FontSize="13" />
+      <StackPanel Spacing="8">
+        <TextBlock x:Name="Message" TextWrapping="Wrap" MaxWidth="360" FontSize="13" />
+        <StackPanel x:Name="Actions" Orientation="Horizontal" Spacing="8" IsVisible="False">
+          <Button x:Name="Primary" Padding="10,3" />
+          <Button x:Name="Secondary" Padding="10,3" />
+        </StackPanel>
+      </StackPanel>
     </StackPanel>
   </Border>
 </Window>

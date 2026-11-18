@@ -12,6 +12,7 @@ public static class AppPaths
     public static string Settings => Path.Combine(Roaming, "settings.json");
     public static string Secrets => Path.Combine(Roaming, "secrets");
     public static string History => Path.Combine(Roaming, "history.bin");
+    public static string Stats => Path.Combine(Roaming, "stats.json");
     public static string Models => Path.Combine(Local, "models");
     public static string Recordings => Path.Combine(Local, "recordings");
     public static string Pending => Path.Combine(Local, "pending");

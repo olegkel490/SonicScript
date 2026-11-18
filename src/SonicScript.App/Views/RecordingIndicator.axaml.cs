@@ -4,6 +4,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Threading;
 using SonicScript.Core.Localization;
 using SonicScript.Core.Modes;
 using SonicScript.Platform.Windows;
@@ -38,6 +39,7 @@ public sealed partial class RecordingIndicator : Window
         this.FindControl<TextBlock>("Label")!.Text = isNote ? Strings.Get("indicator.note") : mode.Name;
         this.FindControl<Ellipse>("Dot")!.Fill = new SolidColorBrush(Color.Parse("#EF4444"));
         this.FindControl<StackPanel>("Bars")!.IsVisible = true;
+        SetPreview(null);
         ShowAtBottom();
     }
 
@@ -47,6 +49,25 @@ public sealed partial class RecordingIndicator : Window
         this.FindControl<Ellipse>("Dot")!.Fill = new SolidColorBrush(Color.Parse("#F59E0B"));
         this.FindControl<StackPanel>("Bars")!.IsVisible = false;
         ShowAtBottom();
+    }
+
+    /// <summary>Live-Vorschau des erkannten Texts (letzte ~160 Zeichen); null = ausblenden.</summary>
+    public void SetPreview(string? text)
+    {
+        var preview = this.FindControl<TextBlock>("Preview")!;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            if (!preview.IsVisible) return;
+            preview.IsVisible = false;
+        }
+        else
+        {
+            var t = text.Trim();
+            if (t.Length > 160) t = "…" + t[^160..].TrimStart();
+            preview.Text = t;
+            preview.IsVisible = true;
+        }
+        if (IsVisible) Dispatcher.UIThread.Post(ShowAtBottom, DispatcherPriority.Background); // Größe hat sich geändert
     }
 
     public void SetLevel(float level)

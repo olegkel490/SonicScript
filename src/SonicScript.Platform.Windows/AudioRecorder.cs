@@ -16,6 +16,9 @@ public sealed class AudioRecorder : IDisposable
     /// <summary>Pegel 0..1 (RMS, für den Indikator). Kommt auf einem Hintergrund-Thread.</summary>
     public event Action<float>? Level;
 
+    /// <summary>Rohdaten (16 kHz, mono) für die Live-Erkennung. Kommt auf einem Hintergrund-Thread.</summary>
+    public event Action<short[]>? Samples;
+
     public bool IsRecording => _waveIn is not null;
 
     public static IReadOnlyList<MicrophoneInfo> Microphones()
@@ -75,6 +78,12 @@ public sealed class AudioRecorder : IDisposable
     private void OnData(object? sender, WaveInEventArgs e)
     {
         _writer?.Write(e.Buffer, 0, e.BytesRecorded);
+        if (Samples is { } handler && e.BytesRecorded >= 2)
+        {
+            var chunk = new short[e.BytesRecorded / 2];
+            Buffer.BlockCopy(e.Buffer, 0, chunk, 0, chunk.Length * 2);
+            handler(chunk);
+        }
         if (Level is null || e.BytesRecorded < 2) return;
         double sum = 0;
         var n = e.BytesRecorded / 2;

@@ -7,7 +7,7 @@ namespace SonicScript.Core.Settings;
 
 public sealed class AppSettings
 {
-    public const int CurrentSchema = 5;
+    public const int CurrentSchema = 6;
 
     /// <summary>Fehlt in alten Dateien → 1 (Migration in <see cref="Normalize"/>).</summary>
     public int SchemaVersion { get; set; } = 1;
@@ -30,6 +30,18 @@ public sealed class AppSettings
     public KeyCombo PrevModeHotkey { get; set; } = DefaultPrevModeHotkey;
     public static readonly KeyCombo DefaultNextModeHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.OemPeriod);
     public static readonly KeyCombo DefaultPrevModeHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.OemMinus);
+
+    /// <summary>Letztes Diktat zurücknehmen: 1. Druck wortgetreue Fassung statt KI-Text, 2. Druck ganz entfernen.</summary>
+    public KeyCombo UndoHotkey { get; set; } = DefaultUndoHotkey;
+    public static readonly KeyCombo DefaultUndoHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'Z');
+
+    /// <summary>Während der Aufnahme den bisher erkannten Text anzeigen (nur lokale Erkennung).</summary>
+    public bool LivePreview { get; set; } = true;
+
+    /// <summary>Monatliches Kostenlimit für OpenRouter in US-Dollar; 0 = keine Warnung.</summary>
+    public double CostLimitMonthlyUsd { get; set; }
+    /// <summary>Monat ("yyyy-MM"), für den schon gewarnt wurde.</summary>
+    public string? CostWarnedMonth { get; set; }
 
     /// <summary>"Bearbeiten" und "Notiz" als Einträge im Moduswechsel.</summary>
     public bool EditInCycle { get; set; } = true;
@@ -109,6 +121,7 @@ public sealed class AppSettings
         }
         if (SchemaVersion < 4) MigrateToSchema4();
         if (SchemaVersion < 5) MigrateToSchema5();
+        if (SchemaVersion < 6) MigrateToSchema6();
         SchemaVersion = CurrentSchema;
     }
 
@@ -116,6 +129,13 @@ public sealed class AppSettings
     /// Schema 5: Strg+Alt+, diktiert im gewählten Modus, Strg+Alt+. / Strg+Alt+- wechseln den Modus.
     /// Unveränderte alte Tasten (Strg+, / Strg+. / Bearbeiten Strg+Alt+.) werden umgestellt, Sprachbefehle aus.
     /// </summary>
+    /// <summary>Schema 6: neue Rückgängig-Taste nur, wenn sie noch frei ist.</summary>
+    private void MigrateToSchema6()
+    {
+        var others = BuildHotkeyBindings().Where(b => b.Id != "undo").Select(b => b.Combo);
+        if (others.Contains(UndoHotkey)) UndoHotkey = KeyCombo.None;
+    }
+
     private void MigrateToSchema5()
     {
         CurrentModeId = DefaultModeId;
@@ -189,6 +209,7 @@ public sealed class AppSettings
         yield return new HotkeyBinding("edit", EditHotkey, EditTrigger, HotkeyAction.EditSelection);
         yield return new HotkeyBinding("next", NextModeHotkey, TriggerMode.Toggle, HotkeyAction.NextMode);
         yield return new HotkeyBinding("prev", PrevModeHotkey, TriggerMode.Toggle, HotkeyAction.PreviousMode);
+        yield return new HotkeyBinding("undo", UndoHotkey, TriggerMode.Toggle, HotkeyAction.Undo);
     }
 
     public const string EditEntryId = "action:edit";
@@ -250,6 +271,8 @@ public sealed class AppSettings
         Insertion.ClearClipboardAfterSeconds = Math.Clamp(Insertion.ClearClipboardAfterSeconds, 0, 3600);
         Insertion.RestoreDelayMs = Math.Clamp(Insertion.RestoreDelayMs, 100, 5000);
         DuckLevelPercent = Math.Clamp(DuckLevelPercent, 0, 100);
+        Dictionary.IgnoredSuggestions ??= [];
+        CostLimitMonthlyUsd = Math.Clamp(CostLimitMonthlyUsd, 0, 100000);
     }
 }
 
@@ -409,6 +432,23 @@ public sealed class DictionarySettings
     public List<string> Terms { get; set; } = [];
 
     public ObservableCollection<Replacement> Replacements { get; set; } = [];
+
+    /// <summary>Korrekturen nach dem Einfügen erkennen und fürs Wörterbuch vorschlagen.</summary>
+    public bool LearnCorrections { get; set; } = true;
+
+    /// <summary>Abgelehnte Vorschläge ("von→zu"), die nicht erneut angeboten werden.</summary>
+    public List<string> IgnoredSuggestions { get; set; } = [];
+
+    public static string SuggestionKey(string from, string to) => from.ToLowerInvariant() + "→" + to;
+
+    /// <summary>Vorschlag übernehmen: Ersetzung (falls anders geschrieben) und Begriff (als Hinweis für die Erkennung).</summary>
+    public void Accept(string from, string to)
+    {
+        if (!string.Equals(from, to, StringComparison.OrdinalIgnoreCase) &&
+            !Replacements.Any(r => string.Equals(r.From, from, StringComparison.OrdinalIgnoreCase)))
+            Replacements.Add(new Replacement { From = from, To = to });
+        if (!Terms.Contains(to)) Terms.Add(to);
+    }
 }
 
 public sealed class Replacement

@@ -22,6 +22,8 @@ public enum HotkeyAction
     NextMode,
     /// <summary>Vorherigen Modus wählen.</summary>
     PreviousMode,
+    /// <summary>Letztes Diktat rückgängig: erst wortgetreue Fassung, dann ganz entfernen.</summary>
+    Undo,
 }
 
 public sealed record HotkeyBinding(string Id, KeyCombo Combo, TriggerMode Trigger, HotkeyAction Action, string? ModeId = null);
@@ -36,6 +38,7 @@ public enum HotkeyEventKind
     ToggleLibrary,
     NextMode,
     PreviousMode,
+    Undo,
 }
 
 public readonly record struct HotkeyEvent(HotkeyEventKind Kind, HotkeyBinding? Binding);
@@ -166,6 +169,7 @@ public sealed class HotkeyMatcher
             {
                 HotkeyAction.NextMode => HotkeyEventKind.NextMode,
                 HotkeyAction.PreviousMode => HotkeyEventKind.PreviousMode,
+                HotkeyAction.Undo => HotkeyEventKind.Undo,
                 _ => HotkeyEventKind.ToggleLibrary,
             }, match);
         }
@@ -181,7 +185,7 @@ public sealed class HotkeyMatcher
     }
 
     /// <summary>Einmalige Befehle ohne Aufnahme-Sitzung.</summary>
-    private static bool IsCommand(HotkeyAction a) => a is HotkeyAction.ToggleLibrary or HotkeyAction.NextMode or HotkeyAction.PreviousMode;
+    private static bool IsCommand(HotkeyAction a) => a is HotkeyAction.ToggleLibrary or HotkeyAction.NextMode or HotkeyAction.PreviousMode or HotkeyAction.Undo;
 
     private KeyResult OnUp(int vk)
     {

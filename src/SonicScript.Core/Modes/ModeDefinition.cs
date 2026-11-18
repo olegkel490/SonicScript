@@ -22,6 +22,8 @@ public enum ModeKind
     Mail,
     /// <summary>Wie <see cref="Mail"/>, aber die fertige E-Mail auf Englisch.</summary>
     MailEnglish,
+    /// <summary>Antwort auf eine E-Mail (Markierung oder zitierte Mail unter dem Cursor) nach diktierter Vorgabe.</summary>
+    Reply,
 }
 
 public sealed class ModeDefinition
@@ -63,6 +65,7 @@ public static class BuiltInModes
     public const string PromptId = "prompt";
     public const string MailId = "mail";
     public const string MailEnglishId = "mail-en";
+    public const string ReplyId = "reply";
 
     public static List<ModeDefinition> CreateDefaults() =>
     [
@@ -74,6 +77,8 @@ public static class BuiltInModes
                 Keywords = DefaultKeywords[MailId] },
         new() { Id = MailEnglishId, Kind = ModeKind.MailEnglish, Name = "SonicScript Mail EN", Symbol = "@EN", Temperature = 0.3,
                 Keywords = DefaultKeywords[MailEnglishId] },
+        new() { Id = ReplyId, Kind = ModeKind.Reply, Name = "SonicScript Antwort", Symbol = "↩", Temperature = 0.3,
+                Keywords = DefaultKeywords[ReplyId] },
         new() { Id = CalmId, Kind = ModeKind.Calm, Name = "SonicScript $%&!", Symbol = "☯", Temperature = 0.4,
                 Keywords = DefaultKeywords[CalmId] },
         new() { Id = EmojiId, Kind = ModeKind.Emoji, Name = "SonicScript :)", Symbol = "☺", Temperature = 0.5,
@@ -91,6 +96,7 @@ public static class BuiltInModes
         [ImproveId] = "Sauber, Plus, Clean",
         [MailId] = "Mail, E-Mail, Email",
         [MailEnglishId] = "Mail Englisch, Englische Mail, English Mail, Mail English",
+        [ReplyId] = "Antwort, Antworte, Reply",
         [CalmId] = "Ruhig, Sachlich, Calm",
         [EmojiId] = "Emoji, Emojis",
         [TranslateId] = "Englisch, Auf Englisch, English, Übersetze, Übersetzen",

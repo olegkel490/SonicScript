@@ -24,20 +24,34 @@ public sealed partial class Toast : Window
         Closed += (_, _) => { if (_current == this) _current = null; };
     }
 
-    public static void Show(string message, bool isError = false)
+    public static void Show(string message, bool isError = false) => Show(message, isError, null, null, null, null);
+
+    /// <summary>Meldung mit bis zu zwei Knöpfen (z. B. "Übernehmen" / "Ignorieren"); bleibt länger stehen.</summary>
+    public static void Show(string message, bool isError, string? primaryText, Action? primary, string? secondaryText, Action? secondary)
     {
         Dispatcher.UIThread.Post(() =>
         {
             _current?.Close();
             var t = new Toast();
             t.FindControl<TextBlock>("Message")!.Text = message;
+            if (primaryText is not null)
+            {
+                t.FindControl<StackPanel>("Actions")!.IsVisible = true;
+                var p = t.FindControl<Button>("Primary")!;
+                p.Content = primaryText;
+                p.Click += (_, _) => { t.Close(); primary?.Invoke(); };
+                var s = t.FindControl<Button>("Secondary")!;
+                s.IsVisible = secondaryText is not null;
+                s.Content = secondaryText;
+                s.Click += (_, _) => { t.Close(); secondary?.Invoke(); };
+            }
             if (isError)
             {
                 var box = t.FindControl<Border>("Box")!;
                 box.BorderBrush = new SolidColorBrush(Color.Parse("#E5484D"));
                 box.BorderThickness = new Thickness(0, 0, 0, 3); // roter Streifen unten
             }
-            t._timer.Interval = TimeSpan.FromSeconds(isError ? 7 : 4);
+            t._timer.Interval = TimeSpan.FromSeconds(primaryText is not null ? 20 : isError ? 7 : 4);
             _current = t;
             t.Show();
             t._timer.Start();

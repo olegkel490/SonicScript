@@ -14,7 +14,9 @@ using SonicScript.Core.Modes;
 using SonicScript.Core.Notes;
 using SonicScript.Core.Pipeline;
 using SonicScript.Core.Rules;
+using SonicScript.Core.Net;
 using SonicScript.Core.Settings;
+using SonicScript.Core.Stats;
 using SonicScript.Core.Storage;
 using SonicScript.Core.Text;
 using SonicScript.Core.Transcription;
@@ -47,7 +49,13 @@ public sealed class AppController : IDisposable
         public required string AudioPath { get; init; }
         public required AppSettings Settings { get; init; }
         public CancellationTokenSource Cts { get; } = new();
+        /// <summary>Erkennung während der Aufnahme (Teilstücke + Vorschau).</summary>
+        public LiveTranscription? Live { get; set; }
+        public TimeSpan AudioDuration { get; set; }
     }
+
+    /// <summary>Zuletzt eingefügter Text – für "Rückgängig".</summary>
+    private sealed record LastInsert(ForegroundInfo Target, string Final, string? Verbatim, string? Before, DateTime At, bool VerbatimShown);
 
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
     private readonly SettingsStore _settingsStore = new(AppPaths.Settings);
@@ -66,6 +74,10 @@ public sealed class AppController : IDisposable
     private Session? _recording;
     private Session? _processing;
     private DictationResult? _last;
+    private LastInsert? _lastInsert;
+    private LiveTranscription? _liveSink;
+    private CancellationTokenSource? _correctionCts;
+    private DateTime _costCheckedAt = DateTime.MinValue;
     private ReleaseInfo? _update;
     private LibraryWindow? _library;
     private SettingsWindow? _settingsWindow;
@@ -79,6 +91,7 @@ public sealed class AppController : IDisposable
         Secrets = new SecretStore(AppPaths.Secrets, protector);
         History = new HistoryStore(AppPaths.History, protector);
         Pending = new PendingRecordings(AppPaths.Pending);
+        Stats = new UsageStats(AppPaths.Stats);
         Http = CreateHttpClient();
         ModelDownloader = new ModelDownloader(Http, AppPaths.Models);
     }
@@ -87,6 +100,7 @@ public sealed class AppController : IDisposable
     public SecretStore Secrets { get; }
     public HistoryStore History { get; }
     public PendingRecordings Pending { get; }
+    public UsageStats Stats { get; }
     public HttpClient Http { get; }
     public ModelDownloader ModelDownloader { get; }
 
@@ -117,6 +131,7 @@ public sealed class AppController : IDisposable
 
         _indicator.Clicked += () => _ = StopAsync();
         _recorder.Level += level => Dispatcher.UIThread.Post(() => _indicator.SetLevel(level));
+        _recorder.Samples += samples => Volatile.Read(ref _liveSink)?.Append(samples);
         _hook.HotkeyTriggered += ev => Dispatcher.UIThread.Post(() => OnHotkey(ev));
         Controls.HotkeyCapture.ActiveChanged += active => _hook.Suspended = active;
         _hook.Matcher = new HotkeyMatcher(Settings.BuildHotkeyBindings());
@@ -185,6 +200,9 @@ public sealed class AppController : IDisposable
                 break;
             case HotkeyEventKind.PreviousMode:
                 StepMode(-1);
+                break;
+            case HotkeyEventKind.Undo:
+                _ = UndoLastAsync();
                 break;
         }
     }
@@ -323,7 +341,8 @@ public sealed class AppController : IDisposable
             return;
         }
 
-        if (EnsureTranscriber() is null)
+        var transcriber = EnsureTranscriber();
+        if (transcriber is null)
         {
             _hook.Matcher?.EndSession();
             Toast.Show(Strings.Get("toast.no_model"), isError: true);
@@ -356,7 +375,10 @@ public sealed class AppController : IDisposable
             return;
         }
 
+        session.Live = CreateLive(transcriber, settings);
+        Volatile.Write(ref _liveSink, session.Live);
         _recording = session;
+        _correctionCts?.Cancel();
         SetTrayState("rec");
         _ = ConfirmRecordingAsync(session);
     }
@@ -365,6 +387,36 @@ public sealed class AppController : IDisposable
     /// Anzeige, Ton und Ducking erst nach der Antipp-Schwelle: Wird z. B. Strg+- nur kurz getippt (= Herauszoomen),
     /// passiert nichts Sichtbares oder Hörbares.
     /// </summary>
+    private LiveTranscription? CreateLive(ITranscriber transcriber, AppSettings s)
+    {
+        try
+        {
+            var live = new LiveTranscription(transcriber, 16000, new LiveTranscriptionOptions
+            {
+                WorkDirectory = AppPaths.Recordings,
+                Preview = s.LivePreview && s.Transcription.Engine == TranscriptionEngine.Local,
+                TrimSilence = s.TrimSilence,
+                Language = s.Transcription.Language == "auto" ? null : s.Transcription.Language,
+                Prompt = DictationPipeline.BuildWhisperPrompt(s.Dictionary.Terms),
+            });
+            live.PreviewChanged += text => Dispatcher.UIThread.Post(() =>
+            {
+                if (_recording?.Live == live && _recording.Confirmed && _recording.Settings.ShowRecordingIndicator) _indicator.SetPreview(text);
+            });
+            return live;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Live transcription", ex);
+            return null;
+        }
+    }
+
+    private void StopLiveSink(Session s)
+    {
+        if (Volatile.Read(ref _liveSink) == s.Live) Volatile.Write(ref _liveSink, null);
+    }
+
     private async Task ConfirmRecordingAsync(Session session)
     {
         await Task.Delay(HotkeyMatcher.TapThreshold);
@@ -399,6 +451,8 @@ public sealed class AppController : IDisposable
             _recording = null;
             _hook.Matcher?.EndSession();
             EndRecordingFeedback(rec, Cue.Cancel);
+            StopLiveSink(rec);
+            rec.Live?.Dispose();
             await _recorder.CancelAsync();
             ResetUi();
         }
@@ -414,6 +468,7 @@ public sealed class AppController : IDisposable
         _recording = null;
         _hook.Matcher?.EndSession();
         EndRecordingFeedback(s, Cue.Stop);
+        StopLiveSink(s);
 
         string? path;
         try
@@ -424,12 +479,15 @@ public sealed class AppController : IDisposable
         {
             Log.Error("Recorder stop", ex);
             Toast.Show(Strings.Format("toast.mic_failed", ex.Message), isError: true);
+            s.Live?.Dispose();
             ResetUi();
             return;
         }
 
-        if (path is null || (WavFile.GetDuration(path) ?? TimeSpan.Zero) < MinRecording)
+        s.AudioDuration = path is null ? TimeSpan.Zero : WavFile.GetDuration(path) ?? TimeSpan.Zero;
+        if (path is null || s.AudioDuration < MinRecording)
         {
+            s.Live?.Dispose();
             TryDelete(path);
             ResetUi();
             return;
@@ -445,15 +503,19 @@ public sealed class AppController : IDisposable
             var transcriber = EnsureTranscriber() ?? throw new InvalidOperationException("no_transcriber");
             var pipeline = new DictationPipeline(transcriber, CreateChatClient(s.Settings));
             var context = await s.Context;
+            var (live, transcript) = await FinishLiveAsync(s);
             if (s.IsEdit)
             {
-                await EditSelectionAsync(s, pipeline, path, context);
+                await EditSelectionAsync(s, pipeline, path, context, live, transcript);
             }
             else
             {
                 var allowKeywords = s.Binding.Action == HotkeyAction.Dictate;
-                var result = await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token, allowKeywords));
-                await DeliverAsync(s, result, context);
+                var (replyTo, replyInClipboard) = await FindMailAsync(s, context);
+                var result = live
+                    ? await Task.Run(() => pipeline.RunTranscriptAsync(transcript, s.Mode, s.Settings, s.Cts.Token, allowKeywords, replyTo))
+                    : await Task.Run(() => pipeline.RunAsync(path, s.Mode, s.Settings, s.Cts.Token, allowKeywords, replyTo));
+                await DeliverAsync(s, result, context, replyInClipboard, replyTo is not null);
             }
         }
         catch (OperationCanceledException)
@@ -476,14 +538,59 @@ public sealed class AppController : IDisposable
         }
         finally
         {
+            s.Live?.Dispose();
             _processing = null;
             if (!keep) TryDelete(path);
             ResetUi();
         }
     }
 
+    /// <summary>
+    /// Ergebnis der Live-Erkennung. (false, _) = nicht verfügbar oder fehlgeschlagen → die Datei wird wie bisher
+    /// komplett erkannt (scheitert auch das, bleibt die Aufnahme erhalten).
+    /// </summary>
+    private static async Task<(bool Ok, TranscriptionResult? Transcript)> FinishLiveAsync(Session s)
+    {
+        if (s.Live is not { } live) return (false, null);
+        try
+        {
+            var tr = await Task.Run(() => live.FinishAsync(s.Cts.Token));
+            if (live.CommittedChunks > 0) Log.Info($"Live transcription: {live.CommittedChunks} chunk(s) during recording");
+            return (true, tr);
+        }
+        catch (OperationCanceledException) when (s.Cts.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Live transcription", ex);
+            return (false, null);
+        }
+        finally
+        {
+            live.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Für den Antwort-Modus die E-Mail finden: Markierung (Antwort kommt dann in die Zwischenablage) oder der Text
+    /// unter dem Cursor (zitierte Mail im Antwortfenster; Antwort wird eingefügt). Bei Sprachbefehlen nur, was ohne
+    /// Strg+C verfügbar ist.
+    /// </summary>
+    private static async Task<(string? Mail, bool ToClipboard)> FindMailAsync(Session s, FocusContext? context)
+    {
+        var isReply = s.Mode.Kind == ModeKind.Reply;
+        if (!isReply && !(s.Settings.VoiceKeywords && s.Binding.Action == HotkeyAction.Dictate)) return (null, false);
+        if (context?.SelectedText is { Length: >= 20 } sel) return (sel, true);
+        if (context?.TextAfter is { } after && after.Trim().Length >= 40) return (after, false);
+        if (isReply && ForegroundWindow.Current == s.Target.Handle && await TextInserter.CopySelectionAsync() is { Length: >= 20 } copied)
+            return (copied, true);
+        return (null, false);
+    }
+
     /// <summary>"Auswahl bearbeiten": Markierung holen, Anweisung anwenden, Ergebnis ersetzt die Markierung.</summary>
-    private async Task EditSelectionAsync(Session s, DictationPipeline pipeline, string audioPath, FocusContext? context)
+    private async Task EditSelectionAsync(Session s, DictationPipeline pipeline, string audioPath, FocusContext? context, bool live, TranscriptionResult? transcript)
     {
         var selected = context?.SelectedText;
         if (string.IsNullOrEmpty(selected) && ForegroundWindow.Current == s.Target.Handle)
@@ -494,7 +601,9 @@ public sealed class AppController : IDisposable
             return;
         }
 
-        var result = await Task.Run(() => pipeline.RunEditAsync(audioPath, selected, s.Settings, s.Cts.Token));
+        var result = live
+            ? await Task.Run(() => pipeline.RunEditTranscriptAsync(transcript, selected, s.Settings, s.Cts.Token))
+            : await Task.Run(() => pipeline.RunEditAsync(audioPath, selected, s.Settings, s.Cts.Token));
         if (result.IsEmpty)
         {
             ShowWarning(result);
@@ -505,11 +614,13 @@ public sealed class AppController : IDisposable
         // Die Markierung ist noch aktiv → Einfügen ersetzt sie.
         var method = AppRuleResolver.ResolveInsertion(s.Settings, s.Target.App);
         if (method == InsertionMethod.Type) method = InsertionMethod.Paste;
-        ReportOutcome(await _inserter.InsertAsync(result.Final, method, s.Target, s.Settings.Insertion), method);
-        Remember(s, result with { Verbatim = selected });
+        var outcome = await _inserter.InsertAsync(result.Final, method, s.Target, s.Settings.Insertion);
+        ReportOutcome(outcome, method);
+        _lastInsert = outcome == InsertOutcome.Inserted ? new LastInsert(s.Target, result.Final, null, null, DateTime.UtcNow, false) : null;
+        Remember(s, result with { Verbatim = selected }, result.Verbatim);
     }
 
-    private async Task DeliverAsync(Session s, DictationResult result, FocusContext? context)
+    private async Task DeliverAsync(Session s, DictationResult result, FocusContext? context, bool replyInClipboard = false, bool foundMail = false)
     {
         if (result.IsEmpty)
         {
@@ -527,6 +638,16 @@ public sealed class AppController : IDisposable
             return;
         }
 
+        if (!asNote && result.Mode.Kind == ModeKind.Reply && replyInClipboard)
+        {
+            // Mail war markiert (z. B. im Lesebereich) → Markierung nicht überschreiben.
+            await ClipboardService.SetTextAsync(result.Final);
+            Toast.Show(Strings.Get("toast.reply_clipboard"));
+            ShowWarning(result);
+            Remember(s, result);
+            return;
+        }
+
         if (asNote)
         {
             new NoteStore(s.Settings.Notes.Folder).Append(DateTime.Now, result.Final);
@@ -539,11 +660,162 @@ public sealed class AppController : IDisposable
             var method = AppRuleResolver.ResolveInsertion(s.Settings, s.Target.App);
             var target = context?.IsPassword == true ? s.Target with { IsPasswordField = true } : s.Target;
             var text = s.Settings.Insertion.FitToContext ? InsertionFitter.Fit(result.Final, context?.TextBefore) : result.Final;
-            ReportOutcome(await _inserter.InsertAsync(text, method, target, s.Settings.Insertion), method);
+            var outcome = await _inserter.InsertAsync(text, method, target, s.Settings.Insertion);
+            ReportOutcome(outcome, method);
+            if (outcome == InsertOutcome.Inserted)
+            {
+                _lastInsert = new LastInsert(target, result.Final, result.Verbatim, context?.TextBefore, DateTime.UtcNow, false);
+                WatchCorrections(s, text);
+            }
+            else
+            {
+                _lastInsert = null;
+            }
+            if (result.Mode.Kind == ModeKind.Reply && !foundMail && result.Warning == DictationWarning.None)
+                Toast.Show(Strings.Get("toast.reply_no_mail"));
         }
 
         ShowWarning(result);
         Remember(s, result);
+    }
+
+    // ── Rückgängig ─────────────────────────────────────────────────────────────
+
+    public static readonly TimeSpan UndoWindow = TimeSpan.FromMinutes(10);
+
+    /// <summary>1. Druck: KI-Text durch die wortgetreue Fassung ersetzen. 2. Druck (oder ohne KI): Diktat entfernen.</summary>
+    private async Task UndoLastAsync()
+    {
+        if (_recording is not null || _processing is not null) return;
+        var li = _lastInsert;
+        if (li is null || DateTime.UtcNow - li.At > UndoWindow || ForegroundWindow.Current != li.Target.Handle)
+        {
+            Toast.Show(Strings.Get("toast.undo_nothing"));
+            return;
+        }
+        _correctionCts?.Cancel();
+
+        if (!li.VerbatimShown && li.Verbatim is { Length: > 0 } verbatim && verbatim != li.Final)
+        {
+            if (!await TextInserter.UndoAsync(li.Target)) { Toast.Show(Strings.Get("toast.undo_failed"), isError: true); return; }
+            await Task.Delay(120);
+            var s = Settings;
+            var text = s.Insertion.FitToContext ? InsertionFitter.Fit(verbatim, li.Before) : verbatim;
+            var outcome = await _inserter.InsertAsync(text, InsertionMethod.Paste, li.Target, s.Insertion);
+            if (outcome == InsertOutcome.Inserted)
+            {
+                _lastInsert = li with { VerbatimShown = true, At = DateTime.UtcNow };
+                Toast.Show(Strings.Format("toast.undo_verbatim", Controls.HotkeyBox.Display(s.UndoHotkey)));
+            }
+            else
+            {
+                _lastInsert = null;
+                ReportOutcome(outcome, InsertionMethod.Paste);
+            }
+            return;
+        }
+
+        if (await TextInserter.UndoAsync(li.Target))
+        {
+            _lastInsert = null;
+            Toast.Show(Strings.Get("toast.undo_removed"));
+        }
+        else
+        {
+            Toast.Show(Strings.Get("toast.undo_failed"), isError: true);
+        }
+    }
+
+    // ── Wörterbuch lernt mit ───────────────────────────────────────────────────
+
+    private void WatchCorrections(Session s, string inserted)
+    {
+        _correctionCts?.Cancel();
+        _correctionCts = null;
+        if (!s.Settings.Dictionary.LearnCorrections || UsageStats.CountWords(inserted) < 3) return;
+        var cts = new CancellationTokenSource();
+        _correctionCts = cts;
+        _ = WatchCorrectionsAsync(s.Target.Handle, inserted, cts.Token);
+    }
+
+    /// <summary>Nach 15 s, 45 s und 90 s nachsehen, ob im Feld einzelne Wörter korrigiert wurden.</summary>
+    private async Task WatchCorrectionsAsync(IntPtr window, string inserted, CancellationToken ct)
+    {
+        foreach (var wait in new[] { 15, 30, 45 })
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(wait), ct); }
+            catch (OperationCanceledException) { return; }
+            if (ForegroundWindow.Current != window) continue;
+            var text = await FocusContextReader.ReadFocusedTextAsync(TimeSpan.FromSeconds(1));
+            if (ct.IsCancellationRequested) return;
+            if (text is null) continue;
+            var dict = Settings.Dictionary;
+            var found = CorrectionDetector.Detect(inserted, text)
+                .Where(c => !dict.IgnoredSuggestions.Contains(DictionarySettings.SuggestionKey(c.From, c.To)))
+                .Where(c => !dict.Terms.Contains(c.To))
+                .ToList();
+            if (found.Count == 0) continue;
+            OfferSuggestions(found);
+            return;
+        }
+    }
+
+    private void OfferSuggestions(IReadOnlyList<CorrectionSuggestion> found)
+    {
+        var list = string.Join(", ", found.Take(3).Select(c => $"„{c.From}“ → „{c.To}“")) + (found.Count > 3 ? " …" : "");
+        Toast.Show(Strings.Format("toast.learn", list), false,
+            Strings.Get("toast.learn_accept"), () =>
+            {
+                var updated = CloneSettings();
+                foreach (var c in found) updated.Dictionary.Accept(c.From, c.To);
+                ApplySettings(updated);
+                Toast.Show(Strings.Get("toast.learn_added"));
+            },
+            Strings.Get("toast.learn_ignore"), () =>
+            {
+                var updated = CloneSettings();
+                foreach (var c in found) updated.Dictionary.IgnoredSuggestions.Add(DictionarySettings.SuggestionKey(c.From, c.To));
+                ApplySettings(updated);
+            });
+    }
+
+    // ── Kosten (OpenRouter) ────────────────────────────────────────────────────
+
+    /// <summary>Verbrauch aller OpenRouter-Schlüssel, die SonicScript nutzt. null = OpenRouter wird nicht genutzt.</summary>
+    public async Task<OpenRouterKeyUsage?> GetOpenRouterUsageAsync(CancellationToken ct)
+    {
+        var s = Settings;
+        var keys = new List<string>();
+        if (s.Transcription.Engine == TranscriptionEngine.Cloud && OpenRouterUsage.IsOpenRouter(s.Transcription.Cloud.BaseUrl) &&
+            Secrets.Load(TranscriptionSecret) is { Length: > 0 } k1)
+            keys.Add(k1);
+        if (OpenRouterUsage.IsOpenRouter(s.LanguageModel.Endpoint.BaseUrl) && Secrets.Load(LanguageModelSecret) is { Length: > 0 } k2 && !keys.Contains(k2))
+            keys.Add(k2);
+        if (keys.Count == 0) return null;
+        var list = await Task.WhenAll(keys.Select(k => OpenRouterUsage.GetAsync(Http, k, ct)));
+        return OpenRouterUsage.Sum(list);
+    }
+
+    /// <summary>Nach Diktaten höchstens alle 10 Minuten prüfen, ob das Monatslimit erreicht ist.</summary>
+    private async Task CheckCostLimitAsync()
+    {
+        var s = Settings;
+        var month = DateTime.Now.ToString("yyyy-MM");
+        if (s.CostLimitMonthlyUsd <= 0 || s.CostWarnedMonth == month || DateTime.UtcNow - _costCheckedAt < TimeSpan.FromMinutes(10)) return;
+        _costCheckedAt = DateTime.UtcNow;
+        try
+        {
+            var u = await GetOpenRouterUsageAsync(CancellationToken.None);
+            if (u?.Month is not { } used || used < s.CostLimitMonthlyUsd) return;
+            Settings.CostWarnedMonth = month;
+            SaveQuietly();
+            Toast.Show(Strings.Format("toast.cost_limit", used.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                s.CostLimitMonthlyUsd.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)), isError: true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Cost check", ex);
+        }
     }
 
     private static void ReportOutcome(InsertOutcome outcome, InsertionMethod method)
@@ -581,9 +853,11 @@ public sealed class AppController : IDisposable
         }
     }
 
-    private void Remember(Session s, DictationResult result)
+    private void Remember(Session s, DictationResult result, string? spokenText = null)
     {
         _last = result;
+        Stats.Add(DateOnly.FromDateTime(DateTime.Now), result.Mode.Id, spokenText ?? result.Final, s.AudioDuration);
+        _ = CheckCostLimitAsync();
         if (s.Settings.History.Enabled)
         {
             History.Add(new HistoryEntry(DateTimeOffset.Now, result.Mode.Id, result.Verbatim, result.Final, s.Target.App.ProcessName),
@@ -846,6 +1120,10 @@ public sealed class AppController : IDisposable
         var history = new NativeMenuItem(Strings.Get("tray.history"));
         history.Click += (_, _) => OpenSettings("history");
         menu.Add(history);
+
+        var stats = new NativeMenuItem(Strings.Get("tray.stats"));
+        stats.Click += (_, _) => OpenSettings("stats");
+        menu.Add(stats);
 
         if (_update is { } upd)
         {

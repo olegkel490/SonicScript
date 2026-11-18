@@ -25,9 +25,10 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `Strg+Alt+.` | nächster Modus |
 | `Strg+Alt+-` | vorheriger Modus |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
+| `Strg+Alt+Z` | letztes Diktat rückgängig (1× wortgetreue Fassung, 2× entfernen) |
 | `Esc` | Aufnahme abbrechen |
 
-Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Absätzen und Listen) → **Mail** (geglättet und als E-Mail formatiert: Anrede, Absätze, Aufzählungen, Gruß) → **Mail EN** (dasselbe, aber die E-Mail auf Englisch) → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
+Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Absätzen und Listen) → **Mail** (geglättet und als E-Mail formatiert: Anrede, Absätze, Aufzählungen, Gruß) → **Mail EN** (dasselbe, aber die E-Mail auf Englisch) → **Antwort** (Antwort auf eine E-Mail, siehe unten) → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
 (markierten Text per Sprache ändern) → **Notiz** (ablegen statt einfügen). Welche Modi dabei sind, legst du in den
 Einstellungen fest; eigene Modi kommen automatisch dazu.
 
@@ -52,6 +53,17 @@ Antwortentwürfe.
 - **Lokale Spracherkennung:** whisper.cpp über Whisper.net. Die Einrichtung schlägt ein Modell passend zur
   Hardware vor und misst danach die Geschwindigkeit. Cloud-Erkennung ist optional, über OpenRouter oder eine
   OpenAI-kompatible Adresse.
+- **Live-Vorschau und lange Diktate:** Bei lokaler Erkennung zeigt die Aufnahme-Anzeige schon beim Sprechen den
+  erkannten Text. Lange Diktate werden an Sprechpausen in Stücke geteilt und schon während der Aufnahme erkannt –
+  am Ende fehlt nur noch das letzte Stück.
+- **Antwort auf E-Mails:** Im Modus *Antwort* sagst du nur, was du antworten willst („sag zu, Donnerstag passt“).
+  Diktierst du im Antwortfenster, liest SonicScript die zitierte Mail unter dem Cursor und fügt die fertige Antwort
+  ein – in der Sprache der Mail. Ist die Mail markiert (z. B. im Lesebereich), landet die Antwort in der Zwischenablage.
+- **Rückgängig:** `Strg+Alt+Z` ersetzt den KI-Text durch die wortgetreue Fassung, ein zweiter Druck entfernt das Diktat.
+- **Wörterbuch lernt mit:** Korrigierst du nach dem Einfügen ein falsch erkanntes Wort, schlägt SonicScript die
+  Schreibweise fürs Wörterbuch vor.
+- **Statistik und Kosten:** Diktate, Wörter, Sprechzeit und gesparte Tippzeit pro Tag/Woche/Monat; bei OpenRouter
+  der Verbrauch (Tag/Woche/Monat) mit optionaler Warnung ab einem Monatslimit.
 - **KI-Modi:**
   - Sprachmodell: Ollama oder LM Studio lokal, OpenRouter, OpenAI oder eigene Adresse.
   - Das Transkript ist als Daten markiert. Eine Prüfung verwirft Antworten, die keine Umformulierung sind.
