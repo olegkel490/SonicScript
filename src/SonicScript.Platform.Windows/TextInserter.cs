@@ -54,6 +54,15 @@ public sealed class TextInserter
         return InsertOutcome.Inserted;
     }
 
+    /// <summary>Strg+Z an die Ziel-App (nimmt das letzte Einfügen zurück). false = nicht möglich.</summary>
+    public static async Task<bool> UndoAsync(ForegroundInfo target)
+    {
+        if (target.Handle != IntPtr.Zero && ForegroundWindow.Current != target.Handle) return false;
+        if (!await WaitForModifiersReleasedAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(true)) return false;
+        const ushort VK_Z = 0x5A;
+        return Send(Key(VK_CONTROL, false), Key(VK_Z, false), Key(VK_Z, true), Key(VK_CONTROL, true)) != 0;
+    }
+
     /// <summary>
     /// Markierten Text per Strg+C holen (Fallback, wenn UI Automation nichts liefert). Die Zwischenablage wird danach
     /// wiederhergestellt. null = nichts markiert oder Kopieren nicht möglich.

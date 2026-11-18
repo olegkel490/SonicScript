@@ -10,6 +10,7 @@ using SonicScript.Core.LanguageModel;
 using SonicScript.Core.Localization;
 using SonicScript.Core.Modes;
 using SonicScript.Core.Settings;
+using SonicScript.Core.Stats;
 using SonicScript.Core.Transcription;
 using SonicScript.LocalWhisper;
 using SonicScript.Platform.Windows;
@@ -40,6 +41,7 @@ public sealed partial class SettingsWindow : Window
         SetupSpeech();
         SetupModes();
         SetupLists();
+        SetupStats();
 
         Get<Button>("SaveButton").Click += (_, _) => Save();
         Get<Button>("CancelButton").Click += (_, _) => Close();
@@ -342,12 +344,96 @@ public sealed partial class SettingsWindow : Window
         }
     }
 
+    // ── Statistik & Kosten ─────────────────────────────────────────────────────
+
+    private void SetupStats()
+    {
+        RenderStats();
+        Get<Button>("ClearStats").Click += (_, _) => { _app.Stats.Clear(); RenderStats(); };
+        Get<Button>("RefreshCost").Click += async (_, _) => await LoadCostAsync();
+        var loaded = false;
+        Get<TabControl>("Tabs").SelectionChanged += async (_, _) =>
+        {
+            if (loaded || Get<TabControl>("Tabs").SelectedItem != this.FindControl<TabItem>("TabStats")) return;
+            loaded = true;
+            RenderStats();
+            await LoadCostAsync();
+        };
+    }
+
+    private void RenderStats()
+    {
+        var grid = Get<Grid>("StatsGrid");
+        grid.Children.Clear();
+        grid.RowDefinitions.Clear();
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var monday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        var columns = new (string Key, StatsSummary S)[]
+        {
+            ("settings.stats.today", _app.Stats.Summary(today, today)),
+            ("settings.stats.week", _app.Stats.Summary(monday, today)),
+            ("settings.stats.month", _app.Stats.Summary(today.AddDays(-29), today)),
+            ("settings.stats.total", _app.Stats.Summary(null, today)),
+        };
+        string Dur(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours} h {t.Minutes} min" : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes} min" : $"{t.Seconds} s";
+        var rows = new (string Key, Func<StatsSummary, string> Value)[]
+        {
+            ("", _ => ""),
+            ("settings.stats.dictations", x => x.Dictations.ToString("N0", CultureInfo.CurrentCulture)),
+            ("settings.stats.words", x => x.Words.ToString("N0", CultureInfo.CurrentCulture)),
+            ("settings.stats.spoken", x => Dur(x.Spoken)),
+            ("settings.stats.saved", x => Dur(x.Saved)),
+        };
+        for (var r = 0; r < rows.Length; r++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            var label = new TextBlock { Text = r == 0 ? "" : Strings.Get(rows[r].Key), Margin = new Avalonia.Thickness(0, 2, 16, 2) };
+            Grid.SetRow(label, r);
+            grid.Children.Add(label);
+            for (var c = 0; c < columns.Length; c++)
+            {
+                var cell = new TextBlock
+                {
+                    Text = r == 0 ? Strings.Get(columns[c].Key) : rows[r].Value(columns[c].S),
+                    FontWeight = r == 0 || r == rows.Length - 1 ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal,
+                    Margin = new Avalonia.Thickness(0, 2, 16, 2),
+                };
+                Grid.SetRow(cell, r);
+                Grid.SetColumn(cell, c + 1);
+                grid.Children.Add(cell);
+            }
+        }
+        var top = columns[2].S.TopModes;
+        Get<TextBlock>("StatsModes").Text = top.Count == 0 ? "" :
+            Strings.Get("settings.stats.top_modes") + " " + string.Join(", ", top.Select(t => $"{_s.FindMode(t.ModeId)?.Name ?? t.ModeId} ({t.Count})"));
+    }
+
+    private async Task LoadCostAsync()
+    {
+        var info = Get<TextBlock>("CostInfo");
+        info.Text = Strings.Get("settings.cost.loading");
+        try
+        {
+            var u = await _app.GetOpenRouterUsageAsync(CancellationToken.None);
+            if (u is null) { info.Text = Strings.Get("settings.cost.none"); return; }
+            string Usd(double? v) => v is null ? "–" : "$" + v.Value.ToString("0.00", CultureInfo.InvariantCulture);
+            var text = Strings.Format("settings.cost.values", Usd(u.Day), Usd(u.Week), Usd(u.Month), Usd(u.Total));
+            if (u.Remaining is not null) text += " · " + Strings.Format("settings.cost.remaining", Usd(u.Remaining));
+            info.Text = text;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("OpenRouter usage", ex);
+            info.Text = Strings.Format("settings.transfer.failed", ex.Message);
+        }
+    }
+
     // ── Speichern ──────────────────────────────────────────────────────────────
 
     private void Save()
     {
         var error = Get<TextBlock>("SaveError");
-        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit") };
+        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit"), ["next"] = Strings.Get("settings.hotkey.next"), ["prev"] = Strings.Get("settings.hotkey.prev"), ["undo"] = Strings.Get("settings.hotkey.undo") };
         foreach (var m in _s.Modes) names["mode:" + m.Id] = m.Name;
         var conflicts = HotkeyConflicts.Find(_s.BuildHotkeyBindings());
         var blocking = conflicts.Where(c => c.Kind != ConflictKind.ReservedBySystem).ToList();

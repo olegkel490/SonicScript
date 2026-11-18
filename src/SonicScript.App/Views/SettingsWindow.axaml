@@ -88,6 +88,13 @@
             <CheckBox IsChecked="{Binding VoiceKeywords}" Content="{l:Tr settings.voice_keywords}" Margin="0,8,0,0" />
             <TextBlock Classes="hint" Text="{l:Tr settings.voice_keywords_hint}" />
 
+            <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.undo}" />
+            <c:HotkeyBox Width="220" HorizontalAlignment="Left" Combo="{Binding UndoHotkey}" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.undo_hint}" TextWrapping="Wrap" />
+
+            <CheckBox IsChecked="{Binding LivePreview}" Content="{l:Tr settings.live_preview}" Margin="0,8,0,0" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.live_preview_hint}" TextWrapping="Wrap" />
+
             <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.edit}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
               <c:HotkeyBox Width="220" Combo="{Binding EditHotkey}" />
@@ -286,6 +293,8 @@
       <TabItem x:Name="TabDictionary" Header="{l:Tr settings.tab.dictionary}">
         <ScrollViewer>
           <StackPanel>
+            <CheckBox IsChecked="{Binding Dictionary.LearnCorrections}" Content="{l:Tr settings.dict.learn}" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.dict.learn_hint}" TextWrapping="Wrap" />
             <TextBlock Classes="h2" Text="{l:Tr settings.dict.terms}" />
             <TextBox x:Name="Terms" AcceptsReturn="True" MinHeight="120" TextWrapping="NoWrap" />
             <TextBlock Classes="h2" Text="{l:Tr settings.dict.replacements}" />
@@ -305,6 +314,27 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <Button x:Name="AddReplacement" Content="{l:Tr common.add}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Statistik & Kosten -->
+      <TabItem x:Name="TabStats" Header="{l:Tr settings.tab.stats}">
+        <ScrollViewer>
+          <StackPanel>
+            <Grid x:Name="StatsGrid" ColumnDefinitions="Auto,*,*,*,*" Margin="0,4,0,0" />
+            <TextBlock x:Name="StatsModes" Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.stats.hint}" TextWrapping="Wrap" />
+            <Button x:Name="ClearStats" Content="{l:Tr settings.stats.clear}" Margin="0,6,0,0" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.cost}" />
+            <TextBlock x:Name="CostInfo" TextWrapping="Wrap" />
+            <Button x:Name="RefreshCost" Content="{l:Tr settings.cost.refresh}" Margin="0,6,0,0" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+              <TextBlock Text="{l:Tr settings.cost.limit}" VerticalAlignment="Center" />
+              <NumericUpDown Width="140" Minimum="0" Maximum="100000" Increment="1" FormatString="0.##" Value="{Binding CostLimitMonthlyUsd}" />
+            </StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.cost.limit_hint}" TextWrapping="Wrap" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>

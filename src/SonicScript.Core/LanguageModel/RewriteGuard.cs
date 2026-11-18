@@ -35,7 +35,8 @@ public static partial class RewriteGuard
         var fence = CodeFence().Match(t);
         if (fence.Success) t = fence.Groups[1].Value.Trim();
         t = t.Replace(PromptBuilder.TranscriptOpen, "").Replace(PromptBuilder.TranscriptClose, "")
-             .Replace(PromptBuilder.TextOpen, "").Replace(PromptBuilder.TextClose, "").Trim();
+             .Replace(PromptBuilder.TextOpen, "").Replace(PromptBuilder.TextClose, "")
+             .Replace(PromptBuilder.MailOpen, "").Replace(PromptBuilder.MailClose, "").Trim();
         t = Preamble().Replace(t, "").Trim();
         if (t.Length >= 2 && ((t[0] == '"' && t[^1] == '"') || (t[0] == '„' && t[^1] == '“') || (t[0] == '«' && t[^1] == '»')))
             t = t[1..^1].Trim();
@@ -46,9 +47,9 @@ public static partial class RewriteGuard
     {
         if (string.IsNullOrWhiteSpace(cleanedOutput)) return RewriteVerdict.Empty;
         // Prompts dürfen strukturierter (länger) werden als das Diktat.
-        if (kind is not (ModeKind.Custom or ModeKind.Prompt) && cleanedOutput.Length > input.Length * 3 + 300) return RewriteVerdict.TooLong;
+        if (kind is not (ModeKind.Custom or ModeKind.Prompt or ModeKind.Reply) && cleanedOutput.Length > input.Length * 3 + 300) return RewriteVerdict.TooLong;
         // Bei Übersetzungen ist "I can't …" oft eine korrekte Übersetzung, keine Verweigerung.
-        if (kind is not (ModeKind.Custom or ModeKind.Translate or ModeKind.Prompt or ModeKind.MailEnglish) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
+        if (kind is not (ModeKind.Custom or ModeKind.Translate or ModeKind.Prompt or ModeKind.MailEnglish or ModeKind.Reply) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
             return RewriteVerdict.LooksLikeAnswer;
         return RewriteVerdict.Ok;
     }

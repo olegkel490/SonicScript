@@ -3,12 +3,16 @@ using Interop.UIAutomationClient;
 namespace SonicScript.Platform.Windows;
 
 /// <summary>Was im fokussierten Eingabefeld steht – per UI Automation (funktioniert auch in Browsern, Office, XAML-Apps).</summary>
-public sealed record FocusContext(bool IsPassword, string? TextBefore, string? SelectedText);
+/// <param name="TextAfter">Text hinter dem Cursor (max. 10 000 Zeichen), z. B. die zitierte Mail im Antwortfenster.</param>
+public sealed record FocusContext(bool IsPassword, string? TextBefore, string? SelectedText, string? TextAfter = null);
 
 public static class FocusContextReader
 {
     private const int UIA_TextPatternId = 10014;
+    private const int UIA_ValuePatternId = 10002;
     private const int MaxBefore = 80;
+    private const int MaxAfter = 10000;
+    private const int MaxFull = 60000;
 
     /// <summary>
     /// Liest Passwort-Status, Text vor dem Cursor und markierten Text. Läuft auf einem eigenen Thread mit Zeitlimit,
@@ -19,6 +23,33 @@ public static class FocusContextReader
         var task = Task.Run(Capture);
         var done = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
         return done == task && task.IsCompletedSuccessfully ? task.Result : null;
+    }
+
+    /// <summary>Gesamter Text des fokussierten Feldes (für die Korrektur-Erkennung). null = nicht lesbar/Passwort.</summary>
+    public static async Task<string?> ReadFocusedTextAsync(TimeSpan timeout)
+    {
+        var task = Task.Run(ReadFocusedText);
+        var done = await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false);
+        return done == task && task.IsCompletedSuccessfully ? task.Result : null;
+    }
+
+    private static string? ReadFocusedText()
+    {
+        try
+        {
+            var uia = new CUIAutomation8Class();
+            var el = uia.GetFocusedElement();
+            if (el is null || el.CurrentIsPassword != 0) return null;
+            if (el.GetCurrentPattern(UIA_TextPatternId) is IUIAutomationTextPattern text)
+                return text.DocumentRange.GetText(MaxFull);
+            if (el.GetCurrentPattern(UIA_ValuePatternId) is IUIAutomationValuePattern value)
+                return value.CurrentValue;
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static FocusContext? Capture()
@@ -45,7 +76,17 @@ public static class FocusContextReader
             var full = before.GetText(-1) ?? "";
             var textBefore = full.Length > MaxBefore ? full[^MaxBefore..] : full;
 
-            return new FocusContext(false, textBefore, string.IsNullOrEmpty(selected) ? null : selected);
+            string? textAfter = null;
+            try
+            {
+                var after = range.Clone();
+                after.MoveEndpointByRange(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start, range, TextPatternRangeEndpoint.TextPatternRangeEndpoint_End);
+                after.MoveEndpointByRange(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End, text.DocumentRange, TextPatternRangeEndpoint.TextPatternRangeEndpoint_End);
+                textAfter = after.GetText(MaxAfter);
+            }
+            catch (Exception) { }
+
+            return new FocusContext(false, textBefore, string.IsNullOrEmpty(selected) ? null : selected, string.IsNullOrWhiteSpace(textAfter) ? null : textAfter);
         }
         catch (Exception)
         {
