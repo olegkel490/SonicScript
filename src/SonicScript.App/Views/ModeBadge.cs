@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using SonicScript.Core.Localization;
 using SonicScript.Core.Settings;
 using SonicScript.Platform.Windows;
@@ -10,106 +12,157 @@ using SonicScript.Platform.Windows;
 namespace SonicScript.App.Views;
 
 /// <summary>
-/// Kleines, immer sichtbares Abzeichen mit dem aktuellen Modus. ‹ › wechseln den Modus, ziehen verschiebt es.
-/// Nimmt nie den Fokus (Text landet weiter im Zielfenster).
+/// Modus-Abzeichen in der Taskleiste, links neben dem Infobereich (Variante B).
+/// Linksklick = nächster Modus, Rechtsklick = vorheriger, Mausrad = blättern.
+/// Ohne sichtbare Taskleiste (automatisch ausblenden) sitzt es über dem Infobereich; bei Vollbild-Apps verschwindet es.
+/// Nimmt nie den Fokus.
 /// </summary>
 public sealed class ModeBadge : Window
 {
-    private readonly TextBlock _symbol = new() { Foreground = Brushes.White, FontWeight = FontWeight.Bold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _name = new() { Foreground = Brushes.White, FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Border _pill;
-    private bool _styled;
+    private const double Inset = 6;      // Abstand zum Taskleistenrand (DIP)
+    private const double TrayGap = 6;    // Abstand zum Infobereich (DIP)
+
+    private readonly Border _root;
+    private readonly Ellipse _dot = new() { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _symbol = new() { FontWeight = FontWeight.Bold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _name = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+    private OverlayPalette _palette;
+    private string _state = "idle";
+    private CycleEntry? _entry;
+    private bool _hiddenForFullscreen;
 
     public event Action? NextClicked;
     public event Action? PreviousClicked;
-    public event Action<PixelPoint>? Moved;
 
     public ModeBadge()
     {
-        SystemDecorations = SystemDecorations.None;
-        ShowInTaskbar = false;
-        Topmost = true;
-        ShowActivated = false;
-        CanResize = false;
-        SizeToContent = SizeToContent.WidthAndHeight;
-        Background = Brushes.Transparent;
-        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Title = "SonicScript";
-
-        var prev = ArrowButton("‹", Strings.Get("badge.prev"));
-        var next = ArrowButton("›", Strings.Get("badge.next"));
-        prev.Click += (_, _) => PreviousClicked?.Invoke();
-        next.Click += (_, _) => NextClicked?.Invoke();
-
-        var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(4, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeAll), Children = { _symbol, _name } };
-        label.PointerPressed += (_, e) =>
+        _root = new Border
         {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e);
-        };
-        ToolTip.SetTip(label, Strings.Get("badge.tip"));
-
-        _pill = new Border
-        {
-            CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(4, 3),
-            BorderThickness = new Thickness(1),
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { prev, label, next } },
-        };
-        Content = _pill;
-        SetState("idle");
-
-        Opened += (_, _) =>
-        {
-            if (!_styled && TryGetPlatformHandle()?.Handle is { } h) WindowStyles.MakeOverlay(h);
-            _styled = true;
-        };
-        PositionChanged += (_, e) => Moved?.Invoke(e.Point);
-    }
-
-    private static Button ArrowButton(string text, string tip)
-    {
-        var b = new Button
-        {
-            Content = text,
-            Padding = new Thickness(7, 0),
-            MinHeight = 22,
-            FontSize = 15,
-            Foreground = Brushes.White,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Focusable = false,
+            Padding = new Thickness(10, 0),
             Cursor = new Cursor(StandardCursorType.Hand),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 7,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { _dot, _symbol, _name },
+            },
         };
-        ToolTip.SetTip(b, tip);
-        return b;
+        Content = _root;
+        _palette = OverlayChrome.Palette;
+        OverlayChrome.Apply(this, _root, small: true, sizeToContent: false);
+        SizeToContent = SizeToContent.Width;
+        Height = 36;
+        ToolTip.SetTip(_root, Strings.Get("badge.tip"));
+
+        _root.PointerPressed += (_, e) =>
+        {
+            var p = e.GetCurrentPoint(this).Properties;
+            if (p.IsLeftButtonPressed) NextClicked?.Invoke();
+            else if (p.IsRightButtonPressed) PreviousClicked?.Invoke();
+        };
+        _root.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Delta.Y > 0) PreviousClicked?.Invoke();
+            else if (e.Delta.Y < 0) NextClicked?.Invoke();
+        };
+
+        _timer.Tick += (_, _) => Relayout();
+        Opened += (_, _) => { Relayout(); _timer.Start(); };
+        Closed += (_, _) => _timer.Stop();
+        SizeChanged += (_, _) => Relayout();
     }
 
     public void Update(CycleEntry entry, string state)
     {
-        _symbol.Text = entry.Symbol;
-        _name.Text = entry.Name;
-        SetState(state);
+        _entry = entry;
+        _state = state;
+        Render();
+        Relayout();
     }
 
-    private void SetState(string state)
+    private void Render()
     {
-        var (top, bottom) = ModeIcons.Colors(state);
-        _pill.Background = new SolidColorBrush(Color.FromArgb(0xE6, 0x1E, 0x1B, 0x2E));
-        _pill.BorderBrush = new SolidColorBrush(state == "idle" ? Color.FromArgb(0x88, bottom.R, bottom.G, bottom.B) : top);
+        if (_entry is null) return;
+        var color = OverlayChrome.StateColor(_state, _palette.Accent);
+        _symbol.Text = _entry.Symbol;
+        _symbol.Foreground = new SolidColorBrush(color);
+        _dot.Fill = new SolidColorBrush(color);
+        _dot.IsVisible = _state != "idle"; // Punkt nur bei Aufnahme/Verarbeitung
+        _name.Text = OverlayChrome.ShortName(_entry.Name);
+        ToolTip.SetTip(_root, $"{_entry.Symbol} {_entry.Name}\n{Strings.Get("badge.tip")}");
     }
 
-    /// <summary>Gespeicherte Position oder unten rechts über der Taskleiste.</summary>
-    public void Place(int? x, int? y)
+    /// <summary>An die Taskleiste andocken (alle 1,5 s und bei Größenänderung – Taskleiste kann sich bewegen).</summary>
+    private void Relayout()
     {
-        var screen = Screens.Primary;
-        if (screen is null) return;
-        var area = screen.WorkingArea;
-        if (x is { } px && y is { } py && Screens.All.Any(s => s.WorkingArea.Contains(new PixelPoint(px + 10, py + 10))))
+        // Läuft per Timer: Fehler (z. B. Taskleiste gerade nicht erreichbar) dürfen die App nie beenden.
+        try
         {
-            Position = new PixelPoint(px, py);
+            if (OperatingSystem.IsWindows()) RelayoutCore();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Mode badge layout", ex);
+        }
+    }
+
+    private void RelayoutCore()
+    {
+        if (TryGetPlatformHandle()?.Handle is not { } hwnd) return;
+
+        if (Taskbar.IsForegroundFullscreen())
+        {
+            if (IsVisible) { Hide(); _hiddenForFullscreen = true; }
             return;
         }
-        var s2 = screen.Scaling;
-        Position = new PixelPoint(area.X + area.Width - (int)(240 * s2), area.Y + area.Height - (int)(44 * s2));
+        if (_hiddenForFullscreen)
+        {
+            _hiddenForFullscreen = false;
+            Show();
+        }
+
+        var tb = Taskbar.Get();
+        var scale = RenderScaling;
+        var palette = OverlayChrome.PaletteFor(tb is null ? OverlayChrome.IsDark : !tb.LightTheme);
+        if (palette.Dark != _palette.Dark)
+        {
+            _palette = palette;
+            OverlayChrome.ApplyPalette(this, _root, _palette, small: true);
+            Render();
+        }
+
+        var w = (int)Math.Ceiling(Bounds.Width * scale);
+        if (tb is null || tb.AutoHide || tb.Bounds.IsEmpty)
+        {
+            // Keine feste Taskleiste: über dem Infobereich unten rechts schweben.
+            _name.IsVisible = true;
+            Height = 34;
+            var area = Screens.Primary?.WorkingArea ?? new Avalonia.PixelRect(0, 0, 1920, 1040);
+            var h = (int)Math.Ceiling(Height * scale);
+            Position = new PixelPoint(area.X + area.Width - w - (int)(12 * scale), area.Y + area.Height - h - (int)(12 * scale));
+        }
+        else if (tb.IsHorizontal)
+        {
+            _name.IsVisible = true;
+            Height = Math.Max(24, tb.Bounds.Height / scale - 2 * Inset);
+            var h = (int)Math.Ceiling(Height * scale);
+            var right = (tb.NotifyArea?.Left ?? tb.Bounds.Right - (int)(240 * scale)) - (int)(TrayGap * scale);
+            Position = new PixelPoint(right - w, tb.Bounds.Top + (tb.Bounds.Height - h) / 2);
+        }
+        else
+        {
+            // Senkrechte Taskleiste: nur das Symbol, über dem Infobereich.
+            _name.IsVisible = false;
+            Height = 32;
+            var h = (int)Math.Ceiling(Height * scale);
+            var bottom = (tb.NotifyArea?.Top ?? tb.Bounds.Bottom - (int)(300 * scale)) - (int)(TrayGap * scale);
+            Position = new PixelPoint(tb.Bounds.Left + (tb.Bounds.Width - w) / 2, bottom - h);
+        }
+
+        // Klick auf die Taskleiste schiebt sie nach vorn – Abzeichen wieder darüberlegen.
+        Taskbar.BringToTop(hwnd);
     }
 }

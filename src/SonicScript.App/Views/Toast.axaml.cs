@@ -19,11 +19,8 @@ public sealed partial class Toast : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _timer.Tick += (_, _) => { _timer.Stop(); Close(); };
         PointerPressed += (_, _) => Close();
-        Opened += (_, _) =>
-        {
-            if (TryGetPlatformHandle()?.Handle is { } h) WindowStyles.MakeOverlay(h);
-            PlaceBottomRight();
-        };
+        OverlayChrome.Apply(this, this.FindControl<Border>("Box")!);
+        Opened += (_, _) => PlaceBottomRight();
         Closed += (_, _) => { if (_current == this) _current = null; };
     }
 
@@ -34,7 +31,12 @@ public sealed partial class Toast : Window
             _current?.Close();
             var t = new Toast();
             t.FindControl<TextBlock>("Message")!.Text = message;
-            if (isError) t.FindControl<Border>("Box")!.BorderBrush = new SolidColorBrush(Color.Parse("#AAEF4444"));
+            if (isError)
+            {
+                var box = t.FindControl<Border>("Box")!;
+                box.BorderBrush = new SolidColorBrush(Color.Parse("#E5484D"));
+                box.BorderThickness = new Thickness(0, 0, 0, 3); // roter Streifen unten
+            }
             t._timer.Interval = TimeSpan.FromSeconds(isError ? 7 : 4);
             _current = t;
             t.Show();

@@ -15,7 +15,6 @@ public sealed partial class RecordingIndicator : Window
 {
     private static readonly double[] BarWeights = [0.5, 0.8, 1.0, 0.8, 0.5];
     private readonly Rectangle[] _bars;
-    private bool _styled;
 
     public event Action? Clicked;
 
@@ -28,14 +27,9 @@ public sealed partial class RecordingIndicator : Window
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) Clicked?.Invoke();
         };
         ToolTip.SetTip(this.FindControl<Border>("Pill")!, Strings.Get("indicator.hint"));
-        Opened += (_, _) => MakeOverlay();
-    }
-
-    private void MakeOverlay()
-    {
-        if (_styled) return;
-        if (TryGetPlatformHandle()?.Handle is { } h) WindowStyles.MakeOverlay(h);
-        _styled = true;
+        OverlayChrome.Apply(this, this.FindControl<Border>("Pill")!);
+        var accent = new SolidColorBrush(OverlayChrome.Palette.Accent);
+        foreach (var bar in _bars) bar.Fill = accent;
     }
 
     public void ShowRecording(ModeDefinition mode, bool isNote)
