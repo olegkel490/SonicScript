@@ -86,7 +86,66 @@ public static class Taskbar
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
-    private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10, SWP_SHOWWINDOW = 0x40;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetParent(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ScreenToClient(IntPtr hWnd, ref POINT point);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr value);
+
+    private const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
+    private const long WS_CHILD = 0x40000000, WS_POPUP = 0x80000000, WS_CAPTION = 0x00C00000, WS_THICKFRAME = 0x00040000;
+    private const long WS_EX_TOPMOST = 0x8, WS_EX_APPWINDOW = 0x40000, WS_EX_NOACTIVATE = 0x08000000, WS_EX_TOOLWINDOW = 0x80;
+
+    /// <summary>Hauptfenster der Taskleiste (Hauptbildschirm).</summary>
+    public static IntPtr TrayWindow => FindWindow("Shell_TrayWnd", null);
+
+    public static bool IsAlive(IntPtr hwnd) => hwnd != IntPtr.Zero && IsWindow(hwnd);
+
+    /// <summary>
+    /// Fenster als Kindfenster in die Taskleiste einbetten (wie Taskleisten-Tools es tun): bleibt beim Klick auf die
+    /// Taskleiste sichtbar, bewegt sich mit ihr und verschwindet mit ihr bei Vollbild. Startet Explorer neu, wird das
+    /// Fenster mit zerstört – der Aufrufer muss es dann neu anlegen.
+    /// </summary>
+    public static bool Embed(IntPtr hwnd, IntPtr tray)
+    {
+        if (!IsAlive(hwnd) || !IsAlive(tray)) return false;
+        var style = (long)GetWindowLongPtr(hwnd, GWL_STYLE);
+        style = (style & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME)) | WS_CHILD;
+        SetWindowLongPtr(hwnd, GWL_STYLE, (IntPtr)style);
+        var ex = (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        ex = (ex & ~(WS_EX_TOPMOST | WS_EX_APPWINDOW)) | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, (IntPtr)ex);
+        SetParent(hwnd, tray);
+        return GetParent(hwnd) == tray;
+    }
+
+    /// <summary>Kindfenster an eine Bildschirmposition (Pixel) innerhalb der Taskleiste setzen und nach vorn holen.</summary>
+    public static void PlaceChild(IntPtr hwnd, IntPtr tray, int screenX, int screenY, int width, int height)
+    {
+        var p = new POINT { X = screenX, Y = screenY };
+        ScreenToClient(tray, ref p);
+        SetWindowPos(hwnd, HWND_TOP, p.X, p.Y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
 
     public static TaskbarInfo? Get()
     {
