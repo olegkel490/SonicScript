@@ -43,10 +43,11 @@ public static class WindowStyles
     /// Abgerundete Fensterecken ohne Transparenz: Windows 11 über DWM (8 px, mit Schatten),
     /// ältere Versionen über eine Fensterregion. Bei Größenänderung erneut aufrufen.
     /// </summary>
-    public static void RoundCorners(IntPtr hwnd, int widthPx, int heightPx, int radiusPx, bool small = false)
+    /// <param name="forceRegion">Immer Fensterregion (z. B. für Kindfenster – DWM rundet nur Hauptfenster).</param>
+    public static void RoundCorners(IntPtr hwnd, int widthPx, int heightPx, int radiusPx, bool small = false, bool forceRegion = false)
     {
         if (hwnd == IntPtr.Zero || widthPx <= 0 || heightPx <= 0) return;
-        if (HasNativeRoundedCorners)
+        if (HasNativeRoundedCorners && !forceRegion)
         {
             var pref = small ? DWMWCP_ROUNDSMALL : DWMWCP_ROUND;
             if (DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int)) == 0) return;

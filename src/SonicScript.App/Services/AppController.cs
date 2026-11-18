@@ -261,22 +261,49 @@ public sealed class AppController : IDisposable
     {
         if (Settings.ShowModeBadge)
         {
-            if (_badge is null)
-            {
-                _badge = new ModeBadge();
-                _badge.NextClicked += () => StepMode(+1);
-                _badge.PreviousClicked += () => StepMode(-1);
-                _badge.Update(Settings.CurrentEntry, _trayState);
-                _badge.Show();
-            }
+            if (_badge is null) CreateBadge();
             RefreshModeDisplay();
         }
         else
         {
-            _badge?.Close();
-        _osd?.Close();
-            _badge = null;
+            CloseBadge();
         }
+    }
+
+    private bool _disposing;
+
+    private void CreateBadge()
+    {
+        var badge = new ModeBadge();
+        badge.NextClicked += () => StepMode(+1);
+        badge.PreviousClicked += () => StepMode(-1);
+        // Explorer neu gestartet / Taskleiste geändert: altes Feld weg, nach kurzer Pause neu anlegen.
+        badge.RecreateRequested += () => Dispatcher.UIThread.Post(() => { CloseBadge(); _ = RecreateBadgeLaterAsync(); });
+        badge.Closed += (_, _) =>
+        {
+            // Mit der Taskleiste zerstört (Explorer-Neustart) statt von uns geschlossen?
+            if (_badge == badge && !_disposing)
+            {
+                _badge = null;
+                _ = RecreateBadgeLaterAsync();
+            }
+        };
+        _badge = badge;
+        badge.Update(Settings.CurrentEntry, _trayState);
+        badge.Show();
+    }
+
+    private void CloseBadge()
+    {
+        var b = _badge;
+        _badge = null;
+        b?.Close();
+    }
+
+    private async Task RecreateBadgeLaterAsync()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        if (!_disposing && _badge is null && Settings.ShowModeBadge) CreateBadge();
     }
 
 
@@ -939,8 +966,10 @@ public sealed class AppController : IDisposable
         _hook.Dispose();
         _recorder.Dispose();
         (_transcriber as IDisposable)?.Dispose();
+        _disposing = true;
         _tray?.Dispose();
         _badge?.Close();
+        _osd?.Close();
         Http.Dispose();
     }
 }
