@@ -148,7 +148,7 @@ public sealed class AppController : IDisposable
             Toast.Show(Strings.Format("tray.tooltip", Settings.DictateHotkey));
         }
 
-        if (Settings.CheckForUpdates) _ = CheckForUpdatesAsync();
+        _ = UpdateLoopAsync();
     }
 
     private static void CleanupStaleRecordings()
@@ -277,11 +277,9 @@ public sealed class AppController : IDisposable
         var badge = new ModeBadge();
         badge.NextClicked += () => StepMode(+1);
         badge.PreviousClicked += () => StepMode(-1);
-        // Explorer neu gestartet / Taskleiste geändert: altes Feld weg, nach kurzer Pause neu anlegen.
-        badge.RecreateRequested += () => Dispatcher.UIThread.Post(() => { CloseBadge(); _ = RecreateBadgeLaterAsync(); });
         badge.Closed += (_, _) =>
         {
-            // Mit der Taskleiste zerstört (Explorer-Neustart) statt von uns geschlossen?
+            // Unerwartet geschlossen (nicht von uns)? Dann neu anlegen.
             if (_badge == badge && !_disposing)
             {
                 _badge = null;
@@ -842,6 +840,9 @@ public sealed class AppController : IDisposable
 
         menu.Add(new NativeMenuItemSeparator());
 
+        var checkUpdates = new NativeMenuItem(Strings.Get("tray.check_updates"));
+        checkUpdates.Click += async (_, _) => await CheckForUpdatesAsync(manual: true);
+
         var history = new NativeMenuItem(Strings.Get("tray.history"));
         history.Click += (_, _) => OpenSettings("history");
         menu.Add(history);
@@ -851,6 +852,10 @@ public sealed class AppController : IDisposable
             var update = new NativeMenuItem(Strings.Format("tray.update", upd.Tag));
             update.Click += async (_, _) => await InstallUpdateAsync(upd);
             menu.Add(update);
+        }
+        else
+        {
+            menu.Add(checkUpdates);
         }
 
         var settings = new NativeMenuItem(Strings.Get("tray.settings"));
@@ -898,21 +903,37 @@ public sealed class AppController : IDisposable
         }
     }
 
-    private async Task CheckForUpdatesAsync()
+    public static readonly TimeSpan UpdateInterval = TimeSpan.FromHours(2);
+
+    /// <summary>Kurz nach dem Start und danach alle 2 Stunden nach neuen Versionen suchen (wenn eingeschaltet).</summary>
+    private async Task UpdateLoopAsync()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(15));
+        while (!_disposing)
+        {
+            if (Settings.CheckForUpdates) await CheckForUpdatesAsync(manual: false);
+            await Task.Delay(UpdateInterval);
+        }
+    }
+
+    /// <param name="manual">Vom Nutzer ausgelöst: auch "aktuell" und Fehler melden.</param>
+    private async Task CheckForUpdatesAsync(bool manual)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(15));
-            _update = await new UpdateChecker(Http).GetNewerReleaseAsync(CurrentVersion, CancellationToken.None);
-            if (_update is not null)
-            {
-                RebuildTrayMenu();
-                Toast.Show(Strings.Format("toast.update_available", _update.Tag));
-            }
+            var found = await new UpdateChecker(Http).GetNewerReleaseAsync(CurrentVersion, CancellationToken.None);
+            var isNew = found is not null && found.Tag != _update?.Tag;
+            _update = found;
+            RebuildTrayMenu();
+            if (found is not null && (isNew || manual))
+                Toast.Show(Strings.Format("toast.update_available", found.Tag));
+            else if (found is null && manual)
+                Toast.Show(Strings.Format("toast.up_to_date", CurrentVersion.ToString(3)));
         }
         catch (Exception ex)
         {
             Log.Error("Update check", ex);
+            if (manual) Toast.Show(Strings.Format("update.failed", Short(ex.Message)), isError: true);
         }
     }
 

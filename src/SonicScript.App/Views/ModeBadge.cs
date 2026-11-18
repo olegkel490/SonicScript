@@ -12,10 +12,9 @@ using SonicScript.Platform.Windows;
 namespace SonicScript.App.Views;
 
 /// <summary>
-/// Modus-Feld in der Taskleiste, links neben dem Infobereich.
-/// Normalfall: als Kindfenster in die Taskleiste eingebettet – gehört damit zur Taskleiste (kein Schatten, verschwindet
-/// nicht beim Klick auf die Taskleiste, blendet sich mit ihr bei Vollbild aus).
-/// Fallback (Einbetten nicht möglich oder Taskleiste automatisch ausgeblendet): schwebt über dem Infobereich.
+/// Modus-Feld in der Taskleiste, links neben dem Infobereich. Liegt flach über der Taskleiste (ohne Windows-Schatten
+/// und -Rahmen) und wird sofort wieder nach vorn geholt, wenn die Taskleiste per Klick nach vorn kommt.
+/// Bei automatisch ausgeblendeter Taskleiste schwebt es unten rechts; bei Vollbild-Apps blendet es sich aus.
 /// Linksklick = nächster Modus, Rechtsklick = vorheriger, Mausrad = blättern. Nimmt nie den Fokus.
 /// </summary>
 public sealed class ModeBadge : Window
@@ -27,20 +26,16 @@ public sealed class ModeBadge : Window
     private readonly Ellipse _dot = new() { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _symbol = new() { FontWeight = FontWeight.Bold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _name = new() { FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1.5) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private Taskbar.ForegroundWatcher? _watcher;
     private OverlayPalette _palette;
     private string _state = "idle";
     private CycleEntry? _entry;
-    private IntPtr _embeddedIn;
-    private bool _embedFailed;
     private bool _hiddenForFullscreen;
     private (int X, int Y, int W, int H) _lastRect;
 
     public event Action? NextClicked;
     public event Action? PreviousClicked;
-
-    /// <summary>Taskleiste neu gestartet oder Lage geändert (z. B. automatisch ausblenden) – Fenster neu anlegen.</summary>
-    public event Action? RecreateRequested;
 
     public ModeBadge()
     {
@@ -49,7 +44,7 @@ public sealed class ModeBadge : Window
         ShowInTaskbar = false;
         ShowActivated = false;
         CanResize = false;
-        Topmost = false;
+        Topmost = true;
         TransparencyLevelHint = [WindowTransparencyLevel.None];
         SizeToContent = SizeToContent.Manual;
         Width = 120;
@@ -85,13 +80,24 @@ public sealed class ModeBadge : Window
         };
 
         _timer.Tick += (_, _) => Relayout();
-        Opened += (_, _) => { Relayout(); _timer.Start(); };
-        Closed += (_, _) => _timer.Stop();
+        Opened += (_, _) =>
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                try { _watcher = new Taskbar.ForegroundWatcher(OnForegroundChanged); }
+                catch (Exception ex) { Log.Error("Mode badge watcher", ex); }
+            }
+            Relayout();
+            _timer.Start();
+        };
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _watcher?.Dispose();
+        };
     }
 
-    public bool IsEmbedded => _embeddedIn != IntPtr.Zero;
-
-    /// <summary>Wie ein Taskleisten-Knopf: dezente Fläche, kleine Rundung, kein eigener Rahmen.</summary>
+    /// <summary>Wie ein Taskleisten-Knopf: flache, dezente Fläche mit kleiner Rundung.</summary>
     private void ApplyLook()
     {
         var surface = _palette.Dark ? Color.Parse("#2E2E2E") : Color.Parse("#E4E4E4");
@@ -122,6 +128,22 @@ public sealed class ModeBadge : Window
         ToolTip.SetTip(_root, $"{_entry.Symbol} {_entry.Name}\n{Strings.Get("badge.tip")}");
     }
 
+    /// <summary>Klick auf die Taskleiste macht sie zum Vordergrund und schiebt sie nach vorn – sofort wieder darüberlegen.</summary>
+    private void OnForegroundChanged()
+    {
+        try
+        {
+            if (TryGetPlatformHandle()?.Handle is not { } h || !IsVisible) return;
+            Taskbar.BringToTop(h);
+            // Die Taskleiste ordnet sich manchmal kurz danach noch einmal um.
+            DispatcherTimer.RunOnce(() => { if (IsVisible) Taskbar.BringToTop(h); }, TimeSpan.FromMilliseconds(150));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Mode badge bring to top", ex);
+        }
+    }
+
     private void Relayout()
     {
         // Läuft per Timer: Fehler (z. B. Taskleiste gerade nicht erreichbar) dürfen die App nie beenden.
@@ -145,81 +167,7 @@ public sealed class ModeBadge : Window
     private void RelayoutCore()
     {
         if (TryGetPlatformHandle()?.Handle is not { } hwnd) return;
-        var tb = Taskbar.Get();
-        var scale = RenderScaling;
 
-        var palette = OverlayChrome.PaletteFor(tb is null ? OverlayChrome.IsDark : !tb.LightTheme);
-        if (palette.Dark != _palette.Dark)
-        {
-            _palette = palette;
-            ApplyLook();
-            Render();
-        }
-
-        var tray = Taskbar.TrayWindow;
-        var canEmbed = !_embedFailed && tb is { AutoHide: false } && !tb.Bounds.IsEmpty && Taskbar.IsAlive(tray);
-
-        if (IsEmbedded)
-        {
-            // Explorer neu gestartet oder Taskleiste jetzt automatisch ausgeblendet → neu anlegen.
-            if (!canEmbed || tray != _embeddedIn)
-            {
-                RecreateRequested?.Invoke();
-                return;
-            }
-        }
-        else if (canEmbed)
-        {
-            if (Taskbar.Embed(hwnd, tray))
-            {
-                _embeddedIn = tray;
-                _lastRect = default;
-                Log.Info("Mode badge embedded into taskbar");
-            }
-            else
-            {
-                _embedFailed = true;
-                Log.Info("Mode badge: embedding into taskbar failed, using floating badge");
-            }
-        }
-
-        if (IsEmbedded) PlaceInTaskbar(hwnd, tb!, scale);
-        else PlaceFloating(hwnd, tb, scale);
-    }
-
-    private void PlaceInTaskbar(IntPtr hwnd, TaskbarInfo tb, double scale)
-    {
-        int x, y, w, h;
-        if (tb.IsHorizontal)
-        {
-            _name.IsVisible = true;
-            h = tb.Bounds.Height - (int)Math.Round(2 * Inset * scale);
-            w = ContentWidthPx(scale);
-            var right = (tb.NotifyArea?.Left ?? tb.Bounds.Right - (int)(240 * scale)) - (int)(TrayGap * scale);
-            x = right - w;
-            y = tb.Bounds.Top + (tb.Bounds.Height - h) / 2;
-        }
-        else
-        {
-            _name.IsVisible = false; // senkrechte Taskleiste: nur das Symbol
-            w = tb.Bounds.Width - (int)Math.Round(2 * Inset * scale);
-            h = (int)Math.Round(32 * scale);
-            var bottom = (tb.NotifyArea?.Top ?? tb.Bounds.Bottom - (int)(300 * scale)) - (int)(TrayGap * scale);
-            x = tb.Bounds.Left + (tb.Bounds.Width - w) / 2;
-            y = bottom - h;
-        }
-
-        if (_lastRect != (x, y, w, h))
-        {
-            _lastRect = (x, y, w, h);
-            WindowStyles.RoundCorners(hwnd, w, h, (int)Math.Round(OverlayChrome.SmallRadius * scale), small: true, forceRegion: true);
-        }
-        // Immer wieder nach vorn: die Taskleiste zeichnet ihre eigenen Elemente sonst darüber.
-        Taskbar.PlaceChild(hwnd, _embeddedIn, x, y, w, h);
-    }
-
-    private void PlaceFloating(IntPtr hwnd, TaskbarInfo? tb, double scale)
-    {
         if (Taskbar.IsForegroundFullscreen())
         {
             if (IsVisible) { Hide(); _hiddenForFullscreen = true; }
@@ -231,31 +179,56 @@ public sealed class ModeBadge : Window
             Show();
         }
 
-        WindowStyles.MakeOverlay(hwnd);
-        _name.IsVisible = true;
-        var w = ContentWidthPx(scale);
-        var h = (int)Math.Round(34 * scale);
-        Width = w / scale;
-        Height = h / scale;
-
-        int x, y;
-        if (tb is { AutoHide: false } && tb.IsHorizontal && !tb.Bounds.IsEmpty)
+        var tb = Taskbar.Get();
+        var scale = RenderScaling;
+        var palette = OverlayChrome.PaletteFor(tb is null ? OverlayChrome.IsDark : !tb.LightTheme);
+        if (palette.Dark != _palette.Dark)
         {
-            // In der Taskleiste, aber schwebend (Einbetten nicht möglich).
+            _palette = palette;
+            ApplyLook();
+            Render();
+        }
+
+        int x, y, w, h;
+        if (tb is { AutoHide: false, Bounds.IsEmpty: false } && tb.IsHorizontal)
+        {
+            _name.IsVisible = true;
             h = tb.Bounds.Height - (int)Math.Round(2 * Inset * scale);
-            Height = h / scale;
+            w = ContentWidthPx(scale);
             var right = (tb.NotifyArea?.Left ?? tb.Bounds.Right - (int)(240 * scale)) - (int)(TrayGap * scale);
             x = right - w;
             y = tb.Bounds.Top + (tb.Bounds.Height - h) / 2;
         }
+        else if (tb is { AutoHide: false, Bounds.IsEmpty: false })
+        {
+            _name.IsVisible = false; // senkrechte Taskleiste: nur das Symbol
+            w = tb.Bounds.Width - (int)Math.Round(2 * Inset * scale);
+            h = (int)Math.Round(32 * scale);
+            var bottom = (tb.NotifyArea?.Top ?? tb.Bounds.Bottom - (int)(300 * scale)) - (int)(TrayGap * scale);
+            x = tb.Bounds.Left + (tb.Bounds.Width - w) / 2;
+            y = bottom - h;
+        }
         else
         {
+            // Taskleiste automatisch ausgeblendet: unten rechts schweben.
+            _name.IsVisible = true;
+            w = ContentWidthPx(scale);
+            h = (int)Math.Round(34 * scale);
             var area = Screens.Primary?.WorkingArea ?? new Avalonia.PixelRect(0, 0, 1920, 1040);
             x = area.X + area.Width - w - (int)(12 * scale);
             y = area.Y + area.Height - h - (int)(12 * scale);
         }
-        Position = new PixelPoint(x, y);
-        WindowStyles.RoundCorners(hwnd, w, h, (int)Math.Round(OverlayChrome.SmallRadius * scale), small: true);
+
+        if (_lastRect != (x, y, w, h))
+        {
+            _lastRect = (x, y, w, h);
+            Width = w / scale;
+            Height = h / scale;
+            Position = new PixelPoint(x, y);
+            WindowStyles.MakeOverlay(hwnd);
+            WindowStyles.DisableDwmRounding(hwnd); // kein Windows-Schatten/-Rahmen → wirkt flach wie Taskleisten-Inhalt
+            WindowStyles.RoundCorners(hwnd, w, h, (int)Math.Round(OverlayChrome.SmallRadius * scale), small: true, forceRegion: true);
+        }
         Taskbar.BringToTop(hwnd);
     }
 }
