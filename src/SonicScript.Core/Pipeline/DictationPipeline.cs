@@ -1,3 +1,4 @@
+using SonicScript.Core.Audio;
 using SonicScript.Core.LanguageModel;
 using SonicScript.Core.Modes;
 using SonicScript.Core.Net;
@@ -47,21 +48,8 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
     /// <param name="allowKeywords">Sprachbefehle am Anfang auswerten (nur beim normalen Diktat).</param>
     public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false)
     {
-        TranscriptionResult tr;
-        try
-        {
-            var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
-            tr = await transcriber.TranscribeAsync(
-                new TranscriptionRequest(audioPath, lang, BuildWhisperPrompt(settings.Dictionary.Terms)), ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new TranscriptionFailedException(ex.Message, ex);
-        }
+        var tr = await TranscribeAsync(audioPath, settings, ct).ConfigureAwait(false);
+        if (tr is null) return new DictationResult("", "", null, mode, DictationWarning.None, null); // nur Stille
 
         var language = tr.Language ?? (settings.Transcription.Language == "auto" ? null : settings.Transcription.Language);
         var dictionary = new DictionaryApplier(settings.Dictionary);
@@ -113,20 +101,8 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
     public async Task<DictationResult> RunEditAsync(string audioPath, string selectedText, AppSettings settings, CancellationToken ct)
     {
         var mode = EditMode;
-        TranscriptionResult tr;
-        try
-        {
-            var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
-            tr = await transcriber.TranscribeAsync(new TranscriptionRequest(audioPath, lang, BuildWhisperPrompt(settings.Dictionary.Terms)), ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new TranscriptionFailedException(ex.Message, ex);
-        }
+        var tr = await TranscribeAsync(audioPath, settings, ct).ConfigureAwait(false);
+        if (tr is null) return new DictationResult("", "", null, mode, DictationWarning.None, null);
 
         var language = tr.Language ?? (settings.Transcription.Language == "auto" ? null : settings.Transcription.Language);
         var instruction = HallucinationFilter.Clean(tr.Text);
@@ -153,6 +129,37 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         if (RewriteGuard.Check(selectedText, cleaned, ModeKind.Custom) != RewriteVerdict.Ok)
             return new DictationResult(instruction, "", language, mode, DictationWarning.ModeRejected, null);
         return new DictationResult(instruction, cleaned, language, mode, DictationWarning.None, null);
+    }
+
+    /// <summary>
+    /// Stille kürzen (falls eingeschaltet) und transkribieren. null = in der Aufnahme war keine Sprache.
+    /// Die gekürzte Zwischendatei wird danach gelöscht.
+    /// </summary>
+    private async Task<TranscriptionResult?> TranscribeAsync(string audioPath, AppSettings settings, CancellationToken ct)
+    {
+        var trim = settings.TrimSilence ? SilenceTrimmer.Trim(audioPath) : null;
+        if (trim is { HasSpeech: false }) return null;
+        var path = trim?.Path ?? audioPath;
+        try
+        {
+            var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
+            return await transcriber.TranscribeAsync(new TranscriptionRequest(path, lang, BuildWhisperPrompt(settings.Dictionary.Terms)), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new TranscriptionFailedException(ex.Message, ex);
+        }
+        finally
+        {
+            if (trim is { Changed: true } && trim.Path != audioPath)
+            {
+                try { File.Delete(trim.Path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
     }
 
     public static readonly ModeDefinition EditMode = new() { Id = "edit", Kind = ModeKind.Custom, Name = "Bearbeiten", Symbol = "✂" };

@@ -35,7 +35,7 @@ public static class PromptBuilder
             sb.AppendLine();
         }
 
-        if (mode.Kind != ModeKind.Translate && !de && !string.IsNullOrEmpty(language) && language != "en" && language != "auto")
+        if (mode.Kind is not (ModeKind.Translate or ModeKind.MailEnglish) && !de && !string.IsNullOrEmpty(language) && language != "en" && language != "auto")
             sb.AppendLine("Keep the language of the transcript.");
 
         sb.Append(de
@@ -49,6 +49,11 @@ public static class PromptBuilder
         ModeKind.Improve => de
             ? "Mache daraus sauberen Schrifttext: Rechtschreibung, Grammatik und Zeichensetzung korrigieren, Füllwörter (äh, ähm, also, halt) und Wiederholungen streichen, Selbstkorrekturen des Sprechers übernehmen. Inhalt, Tonfall und Sprache bleiben gleich. Nichts hinzufügen. " + FormattingDe
             : "Turn this into clean written text: fix spelling, grammar and punctuation, remove filler words and repetitions, apply the speaker's self-corrections. Keep meaning, tone and language. Add nothing. " + FormattingEn,
+        ModeKind.MailEnglish => de
+            ? "Mache aus dem Diktat eine fertige E-Mail AUF ENGLISCH (übersetze, falls auf Deutsch oder in einer anderen Sprache diktiert). Glätte den Inhalt wie ein Lektor: Füllwörter, Wiederholungen und Versprecher streichen, Selbstkorrekturen übernehmen, holprige Sätze flüssig formulieren. Schreibe natürliches, idiomatisches Englisch im Tonfall des Diktats (Du → freundlich-locker, Sie → höflich-professionell). Inhalt nicht verändern, nichts erfinden; Namen, Zahlen und Termine korrekt übernehmen.\n" +
+              "Format:\n- Anrede in eigener Zeile mit Komma (z. B. „Hi Anna,“ bzw. „Dear Mr Smith,“), danach eine Leerzeile.\n- Inhalt in kurzen Absätzen (2–4 Sätze, ein Gedanke pro Absatz), getrennt durch Leerzeilen.\n- Mehrere Punkte, Fragen, Termine oder Schritte als Aufzählung mit „- “.\n- Am Ende eine Leerzeile und eine kurze englische Grußformel in eigener Zeile (z. B. „Best regards“), ohne Namen, wenn keiner diktiert wurde.\n- Kein Betreff, keine Signatur, kein Markdown außer „- “ für Aufzählungen."
+            : "Turn the dictation into a finished e-mail IN ENGLISH (translate if it was dictated in another language). Polish the content like an editor: remove filler words, repetitions and slips, apply self-corrections, make clumsy sentences flow. Write natural, idiomatic English in the dictation's tone (informal → friendly, formal → polite and professional). Do not change the content or invent anything; keep names, numbers and dates correct.\n" +
+              "Format:\n- Greeting on its own line with a comma (e.g. \"Hi Anna,\" or \"Dear Mr Smith,\"), then a blank line.\n- Body in short paragraphs (2–4 sentences, one idea each), separated by blank lines.\n- Several points, questions, dates or steps as a list with \"- \".\n- At the end a blank line and a short English sign-off on its own line (e.g. \"Best regards\"), without a name unless one was dictated.\n- No subject, no signature block, no Markdown except \"- \" for lists.",
         ModeKind.Mail => de
             ? "Mache aus dem Diktat eine fertige E-Mail. Glätte den Text wie ein Lektor: Rechtschreibung, Grammatik und Zeichensetzung korrigieren, Füllwörter, Wiederholungen und Versprecher streichen, Selbstkorrekturen übernehmen, holprige Sätze flüssig formulieren. Inhalt, Tonfall, Du/Sie und Sprache bleiben, nichts erfinden.\n" +
               "Format:\n- Anrede in eigener Zeile, mit Komma (aus dem Diktat übernehmen, sonst „Hallo,“), danach eine Leerzeile.\n- Inhalt in kurzen Absätzen (2–4 Sätze, ein Gedanke pro Absatz), getrennt durch Leerzeilen.\n- Mehrere Punkte, Fragen, Termine oder Schritte als Aufzählung mit „- “.\n- Am Ende eine Leerzeile und eine kurze Grußformel in eigener Zeile (aus dem Diktat, sonst „Viele Grüße“), ohne Namen, wenn keiner diktiert wurde.\n- Kein Betreff, keine Signatur, kein Markdown außer „- “ für Aufzählungen."
