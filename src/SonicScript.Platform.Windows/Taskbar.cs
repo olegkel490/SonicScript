@@ -112,7 +112,12 @@ public static class Taskbar
 
         public ForegroundWatcher(Action onChange)
         {
-            _proc = (_, _, _, _, _, _, _) => onChange();
+            // Eine Exception darf nie zurück in Windows laufen – das beendet den Prozess sofort (FailFast).
+            _proc = (_, _, _, _, _, _, _) =>
+            {
+                try { onChange(); }
+                catch (Exception ex) { PlatformErrors.Report?.Invoke("Foreground watcher", ex); }
+            };
             _hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _proc, 0, 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
         }

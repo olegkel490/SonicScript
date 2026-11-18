@@ -65,7 +65,7 @@ public sealed class KeyboardHook : IDisposable
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("KeyboardHook: " + ex);
+                PlatformErrors.Report?.Invoke("Keyboard hook", ex);
             }
         }
         return CallNextHookEx(_hook, nCode, wParam, lParam);

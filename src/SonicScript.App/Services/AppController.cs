@@ -121,9 +121,16 @@ public sealed class AppController : IDisposable
 
     // ── Start ──────────────────────────────────────────────────────────────────
 
+    /// <summary>Grund für das Beenden (fürs Log).</summary>
+    public string? ExitReason { get; private set; }
+
     public void Start()
     {
         Log.Info($"Start {CurrentVersion} on {Environment.OSVersion}");
+        var crashes = CrashGuard.Start(CurrentVersion.ToString(3));
+        if (crashes.Count > 0)
+            Toast.Show(Strings.Get("toast.crashed"), true, Strings.Get("toast.open_log"), () => OpenUrl(AppPaths.Local), null, null);
+        _lifetime.ShutdownRequested += (_, _) => ExitReason ??= "shutdown requested (Windows logoff/shutdown or window closed)";
         WhisperRuntime.StartInBackground(AppPaths.Local);
         Pending.Cleanup();
         CleanupStaleRecordings();
@@ -426,6 +433,7 @@ public sealed class AppController : IDisposable
         if (s.PlaySounds) Sounds.Play(Cue.Start);
         if (s.DuckOtherAudio) _ducker.Duck(s.DuckLevelPercent);
         if (s.ShowRecordingIndicator) _indicator.ShowRecording(session.Mode, session.IsNote);
+        Log.Info($"Recording: {(session.IsNote ? "note" : session.IsEdit ? "edit" : session.Mode.Id)}, engine {s.Transcription.Engine}");
     }
 
     /// <summary>Ende der Aufnahme: Ducking aufheben, ggf. Ton.</summary>
@@ -856,6 +864,7 @@ public sealed class AppController : IDisposable
     private void Remember(Session s, DictationResult result, string? spokenText = null)
     {
         _last = result;
+        Log.Info($"Dictation done: {result.Mode.Id}, {UsageStats.CountWords(result.Final)} words, {s.AudioDuration.TotalSeconds:0.0} s audio, warning {result.Warning}");
         Stats.Add(DateOnly.FromDateTime(DateTime.Now), result.Mode.Id, spokenText ?? result.Final, s.AudioDuration);
         _ = CheckCostLimitAsync();
         if (s.Settings.History.Enabled)
@@ -1141,7 +1150,7 @@ public sealed class AppController : IDisposable
         menu.Add(settings);
 
         var quit = new NativeMenuItem(Strings.Get("tray.quit"));
-        quit.Click += (_, _) => _lifetime.Shutdown();
+        quit.Click += (_, _) => { ExitReason = "quit from tray"; _lifetime.Shutdown(); };
         menu.Add(quit);
 
         _tray.Menu = menu;
@@ -1229,6 +1238,7 @@ public sealed class AppController : IDisposable
             switch (result)
             {
                 case UpdateResult.Ready:
+                    ExitReason = "update to " + release.Tag;
                     _lifetime.Shutdown();
                     break;
                 case UpdateResult.NoWriteAccess:
