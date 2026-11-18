@@ -277,11 +277,9 @@ public sealed class AppController : IDisposable
         var badge = new ModeBadge();
         badge.NextClicked += () => StepMode(+1);
         badge.PreviousClicked += () => StepMode(-1);
-        // Explorer neu gestartet / Taskleiste geändert: altes Feld weg, nach kurzer Pause neu anlegen.
-        badge.RecreateRequested += () => Dispatcher.UIThread.Post(() => { CloseBadge(); _ = RecreateBadgeLaterAsync(); });
         badge.Closed += (_, _) =>
         {
-            // Mit der Taskleiste zerstört (Explorer-Neustart) statt von uns geschlossen?
+            // Unerwartet geschlossen (nicht von uns)? Dann neu anlegen.
             if (_badge == badge && !_disposing)
             {
                 _badge = null;

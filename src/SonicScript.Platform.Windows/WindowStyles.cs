@@ -35,6 +35,18 @@ public static class WindowStyles
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
     private const int DWMWCP_ROUNDSMALL = 3;
+    private const int DWMWCP_DONOTROUND = 1;
+
+    /// <summary>
+    /// Windows 11 gibt rundgemachten Fenstern Rahmen und Schatten (wirkt wie ein schwebendes Fenster). Für Elemente,
+    /// die flach in der Taskleiste sitzen sollen, abschalten – die Rundung kommt dann von der Fensterregion.
+    /// </summary>
+    public static void DisableDwmRounding(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero || !HasNativeRoundedCorners) return;
+        var pref = DWMWCP_DONOTROUND;
+        DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
+    }
 
     /// <summary>Windows 11 rundet Fenster selbst ab (mit Rahmen und Schatten wie bei Systemmenüs).</summary>
     public static bool HasNativeRoundedCorners => Environment.OSVersion.Version.Build >= 22000;
