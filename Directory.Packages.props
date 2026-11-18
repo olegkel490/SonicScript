@@ -8,6 +8,7 @@
     <PackageVersion Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageVersion Include="Interop.UIAutomationClient" Version="10.19041.0" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.15" />
+    <PackageVersion Include="System.Diagnostics.EventLog" Version="10.0.15" />
     <PackageVersion Include="Whisper.net" Version="$(WhisperNetVersion)" />
     <PackageVersion Include="Whisper.net.Runtime" Version="$(WhisperNetVersion)" />
     <PackageVersion Include="Whisper.net.Runtime.Vulkan" Version="$(WhisperNetVersion)" />

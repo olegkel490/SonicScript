@@ -9,6 +9,7 @@
     <PackageReference Include="NAudio.Wasapi" />
     <PackageReference Include="Interop.UIAutomationClient" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="System.Diagnostics.EventLog" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../SonicScript.Core/SonicScript.Core.csproj" />

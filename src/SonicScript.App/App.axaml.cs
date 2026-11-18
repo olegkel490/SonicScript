@@ -15,10 +15,22 @@ public sealed partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Fehler in Ereignissen/Fensterprozeduren loggen statt die App still zu beenden.
+            Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                Log.Error("UI thread", e.Exception);
+                e.Handled = true;
+            };
+            SonicScript.Platform.Windows.PlatformErrors.Report = Log.Error;
             try
             {
                 _controller = new AppController(desktop);
-                desktop.Exit += (_, _) => _controller.Dispose();
+                desktop.Exit += (_, e) =>
+                {
+                    try { _controller.Dispose(); }
+                    catch (Exception ex) { Log.Error("Dispose", ex); }
+                    finally { CrashGuard.Stop(_controller.ExitReason ?? $"code {e.ApplicationExitCode}"); }
+                };
                 _controller.Start();
                 Program.ActivationRequested += () =>
                     Avalonia.Threading.Dispatcher.UIThread.Post(() => _controller.ShowMainWindow());
