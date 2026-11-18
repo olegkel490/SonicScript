@@ -107,24 +107,37 @@ public static class Taskbar
     /// </summary>
     public sealed class ForegroundWatcher : IDisposable
     {
-        private readonly WinEventProc _proc; // Referenz halten (GC)
+        // Ein einziger, statischer Delegate: Windows kann ihn nach dem Abmelden noch mit bereits eingereihten
+        // Ereignissen aufrufen – ein eingesammelter Delegate würde den Prozess sofort beenden (FailFast).
+        private static readonly WinEventProc Proc = OnEvent;
+        private static readonly Dictionary<IntPtr, Action> Handlers = [];
         private IntPtr _hook;
 
         public ForegroundWatcher(Action onChange)
         {
-            // Eine Exception darf nie zurück in Windows laufen – das beendet den Prozess sofort (FailFast).
-            _proc = (_, _, _, _, _, _, _) =>
-            {
-                try { onChange(); }
-                catch (Exception ex) { PlatformErrors.Report?.Invoke("Foreground watcher", ex); }
-            };
-            _hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _proc, 0, 0,
+            _hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, Proc, 0, 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            if (_hook != IntPtr.Zero) Handlers[_hook] = onChange;
+        }
+
+        private static void OnEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+        {
+            // Eine Exception darf nie zurück in Windows laufen.
+            try
+            {
+                if (Handlers.TryGetValue(hook, out var handler)) handler();
+            }
+            catch (Exception ex)
+            {
+                PlatformErrors.Report?.Invoke("Foreground watcher", ex);
+            }
         }
 
         public void Dispose()
         {
-            if (_hook != IntPtr.Zero) UnhookWinEvent(_hook);
+            if (_hook == IntPtr.Zero) return;
+            Handlers.Remove(_hook);
+            UnhookWinEvent(_hook);
             _hook = IntPtr.Zero;
         }
     }
