@@ -27,7 +27,7 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
 | `Esc` | Aufnahme abbrechen |
 
-Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
+Modi im Wechsel: SonicScript (wortgetreu) → SonicScript+ (geglättet, mit Absätzen und Listen) → **Mail** (geglättet und als E-Mail formatiert: Anrede, Absätze, Aufzählungen, Gruß) → Ruhig → Emoji → EN → Prompt → **Bearbeiten**
 (markierten Text per Sprache ändern) → **Notiz** (ablegen statt einfügen). Welche Modi dabei sind, legst du in den
 Einstellungen fest; eigene Modi kommen automatisch dazu.
 

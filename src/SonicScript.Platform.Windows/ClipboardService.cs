@@ -23,6 +23,7 @@ public static class ClipboardService
 
     public static async Task<bool> SetTextAsync(string text)
     {
+        text = SonicScript.Core.Text.Newlines.ToWindows(text);
         for (var attempt = 0; attempt < 8; attempt++)
         {
             if (TrySetText(text)) return true;
