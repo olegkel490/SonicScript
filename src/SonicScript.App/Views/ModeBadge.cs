@@ -135,10 +135,9 @@ public sealed class ModeBadge : Window
     {
         try
         {
-            if (TryGetPlatformHandle()?.Handle is not { } h || !IsVisible) return;
-            Taskbar.BringToTop(h);
+            Relayout();
             // Die Taskleiste ordnet sich manchmal kurz danach noch einmal um.
-            DispatcherTimer.RunOnce(() => { if (IsVisible) Taskbar.BringToTop(h); }, TimeSpan.FromMilliseconds(150));
+            DispatcherTimer.RunOnce(Relayout, TimeSpan.FromMilliseconds(150));
         }
         catch (Exception ex)
         {
@@ -178,6 +177,7 @@ public sealed class ModeBadge : Window
         if (_hiddenForFullscreen)
         {
             _hiddenForFullscreen = false;
+            _lastRect = default; // nach Show Position/Form neu setzen
             Show();
         }
 
@@ -231,6 +231,8 @@ public sealed class ModeBadge : Window
             WindowStyles.DisableDwmRounding(hwnd); // kein Windows-Schatten/-Rahmen → wirkt flach wie Taskleisten-Inhalt
             WindowStyles.RoundCorners(hwnd, w, h, (int)Math.Round(OverlayChrome.SmallRadius * scale), small: true, forceRegion: true);
         }
-        Taskbar.BringToTop(hwnd);
+        // Jede Sekunde nachprüfen: Rutscht das Feld weg (z. B. nach Ein-/Ausblenden, Auflösungs- oder
+        // Taskleistenwechsel, Schieben in den Arbeitsbereich), wird es sofort zurückgelegt.
+        Taskbar.PlaceOnTop(hwnd, x, y, w, h);
     }
 }
