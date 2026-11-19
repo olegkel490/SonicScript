@@ -199,6 +199,21 @@ public static class Taskbar
     }
 
     /// <summary>Die Taskleiste schiebt sich bei Klick nach vorn – das Abzeichen danach wieder darüber legen.</summary>
+    /// <summary>
+    /// Fenster exakt an diese Pixel-Position legen (falls es woanders liegt) und nach vorn holen.
+    /// Windows bzw. das UI-Framework verschieben Fenster über der Taskleiste gelegentlich in den Arbeitsbereich.
+    /// </summary>
+    public static void PlaceOnTop(IntPtr hwnd, int x, int y, int w, int h)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        if (GetWindowRect(hwnd, out var r) && r.Left == x && r.Top == y && r.Right - r.Left == w && r.Bottom - r.Top == h)
+        {
+            BringToTop(hwnd);
+            return;
+        }
+        SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOACTIVATE);
+    }
+
     public static void BringToTop(IntPtr hwnd)
     {
         if (hwnd != IntPtr.Zero) SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
