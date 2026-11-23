@@ -853,7 +853,7 @@ public sealed class AppController : IDisposable
                 Toast.Show(Strings.Format("toast.mode_failed", Short(result.WarningDetail)), isError: true);
                 break;
             case DictationWarning.ModeRejected:
-                Toast.Show(Strings.Get("toast.mode_rejected"), isError: true);
+                Toast.Show(Strings.Format("toast.mode_rejected", Strings.Get("reject." + (result.WarningDetail ?? "Empty"))), isError: true);
                 break;
             case DictationWarning.ModeNotConfigured:
                 Toast.Show(Strings.Get("toast.mode_not_configured"), isError: true);
@@ -864,7 +864,7 @@ public sealed class AppController : IDisposable
     private void Remember(Session s, DictationResult result, string? spokenText = null)
     {
         _last = result;
-        Log.Info($"Dictation done: {result.Mode.Id}, {UsageStats.CountWords(result.Final)} words, {s.AudioDuration.TotalSeconds:0.0} s audio, warning {result.Warning}");
+        Log.Info($"Dictation done: {result.Mode.Id}, {UsageStats.CountWords(result.Final)} words, {s.AudioDuration.TotalSeconds:0.0} s audio, warning {result.Warning}{(result.WarningDetail is { Length: > 0 } d ? " (" + d + ")" : "")}");
         Stats.Add(DateOnly.FromDateTime(DateTime.Now), result.Mode.Id, spokenText ?? result.Final, s.AudioDuration);
         _ = CheckCostLimitAsync();
         if (s.Settings.History.Enabled)

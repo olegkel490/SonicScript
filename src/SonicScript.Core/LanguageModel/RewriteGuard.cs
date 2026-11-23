@@ -47,7 +47,9 @@ public static partial class RewriteGuard
     {
         if (string.IsNullOrWhiteSpace(cleanedOutput)) return RewriteVerdict.Empty;
         // Prompts dürfen strukturierter (länger) werden als das Diktat.
-        if (kind is not (ModeKind.Custom or ModeKind.Prompt or ModeKind.Reply) && cleanedOutput.Length > input.Length * 3 + 300) return RewriteVerdict.TooLong;
+        // E-Mails bekommen Anrede, Absätze und Gruß – aus kurzen Diktaten werden deutlich längere Texte.
+        var limit = kind is ModeKind.Mail or ModeKind.MailEnglish ? input.Length * 6 + 600 : input.Length * 3 + 300;
+        if (kind is not (ModeKind.Custom or ModeKind.Prompt or ModeKind.Reply) && cleanedOutput.Length > limit) return RewriteVerdict.TooLong;
         // Bei Übersetzungen ist "I can't …" oft eine korrekte Übersetzung, keine Verweigerung.
         if (kind is not (ModeKind.Custom or ModeKind.Translate or ModeKind.Prompt or ModeKind.MailEnglish or ModeKind.Reply) && !Refusal().IsMatch(input.TrimStart()) && Refusal().IsMatch(cleanedOutput.TrimStart()))
             return RewriteVerdict.LooksLikeAnswer;

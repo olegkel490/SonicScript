@@ -63,9 +63,25 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
         }
     }
 
-    public static int MaxTokensFor(string text) => Math.Clamp(text.Length / 2 + 256, 512, 8192);
+    /// <summary>
+    /// Großzügig, weil "denkende" Modelle (Reasoning) ihre Überlegungen auf dieses Limit anrechnen – zu knapp, und die
+    /// eigentliche Antwort bleibt leer. Bezahlt werden nur tatsächlich erzeugte Tokens.
+    /// </summary>
+    public static int MaxTokensFor(string text) => Math.Clamp(text.Length / 2 + 1024, 2048, 16384);
 
     public async Task<string> CompleteAsync(string systemPrompt, string userMessage, double temperature, CancellationToken ct)
+    {
+        var maxTokens = MaxTokensFor(userMessage);
+        var (content, finish) = await SendAsync(systemPrompt, userMessage, temperature, maxTokens, ct).ConfigureAwait(false);
+        // Leer, weil das Limit von den Überlegungen des Modells aufgebraucht wurde → einmal mit viel mehr Platz.
+        if (string.IsNullOrWhiteSpace(content) && finish == "length")
+            (content, finish) = await SendAsync(systemPrompt, userMessage, temperature, Math.Min(maxTokens * 4, 32768), ct).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(content) && finish == "length")
+            throw new RemoteServiceException("output_limit: das Modell hat sein Token-Limit nur für Überlegungen verbraucht");
+        return content;
+    }
+
+    private async Task<(string Content, string? Finish)> SendAsync(string systemPrompt, string userMessage, double temperature, int maxTokens, CancellationToken ct)
     {
         var payload = new
         {
@@ -76,7 +92,7 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
                 new { role = "user", content = userMessage },
             },
             temperature,
-            max_tokens = MaxTokensFor(userMessage),
+            max_tokens = maxTokens,
             stream = false,
         };
 
@@ -90,8 +106,11 @@ public sealed class OpenAiCompatibleChatClient : IChatClient
         try
         {
             using var doc = JsonDocument.Parse(body);
-            var msg = doc.RootElement.GetProperty("choices")[0].GetProperty("message");
-            return msg.GetProperty("content").GetString() ?? "";
+            var choice = doc.RootElement.GetProperty("choices")[0];
+            var finish = choice.TryGetProperty("finish_reason", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString() : null;
+            var msg = choice.GetProperty("message");
+            var content = msg.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() ?? "" : "";
+            return (content, finish);
         }
         catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
         {
