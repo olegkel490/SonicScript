@@ -13,6 +13,7 @@ using SonicScript.Core.Localization;
 using SonicScript.Core.Modes;
 using SonicScript.Core.Notes;
 using SonicScript.Core.Pipeline;
+using SonicScript.Core.Reminders;
 using SonicScript.Core.Rules;
 using SonicScript.Core.Net;
 using SonicScript.Core.Settings;
@@ -41,6 +42,8 @@ public sealed partial class AppController : IDisposable
         public required ModeDefinition Mode { get; set; }
         public required bool IsNote { get; init; }
         public required bool IsEdit { get; init; }
+        /// <summary>An das letzte Diktat anhängen.</summary>
+        public bool IsContinue { get; init; }
         /// <summary>Text vor dem Cursor / Auswahl / Passwortfeld – wird beim Start im Hintergrund gelesen.</summary>
         public required Task<FocusContext?> Context { get; init; }
         /// <summary>Länger als die Antipp-Schwelle gehalten → echte Aufnahme (Ton, Ducking, Anzeige).</summary>
@@ -55,7 +58,7 @@ public sealed partial class AppController : IDisposable
     }
 
     /// <summary>Zuletzt eingefügter Text – für "Rückgängig".</summary>
-    private sealed record LastInsert(ForegroundInfo Target, string Final, string? Verbatim, string? Before, DateTime At, bool VerbatimShown);
+    private sealed record LastInsert(ForegroundInfo Target, string Final, string? Verbatim, string? Before, DateTime At, bool VerbatimShown, string? ModeId = null);
 
     private readonly IClassicDesktopStyleApplicationLifetime _lifetime;
     private readonly SettingsStore _settingsStore = new(AppPaths.Settings);
@@ -92,6 +95,7 @@ public sealed partial class AppController : IDisposable
         Secrets = new SecretStore(AppPaths.Secrets, protector);
         History = new HistoryStore(AppPaths.History, protector);
         Pending = new PendingRecordings(AppPaths.Pending);
+        Reminders = new ReminderStore(AppPaths.Reminders);
         Stats = new UsageStats(AppPaths.Stats);
         Http = CreateHttpClient();
         ModelDownloader = new ModelDownloader(Http, AppPaths.Models);
@@ -102,6 +106,7 @@ public sealed partial class AppController : IDisposable
     public HistoryStore History { get; }
     public PendingRecordings Pending { get; }
     public UsageStats Stats { get; }
+    public ReminderStore Reminders { get; }
     public HttpClient Http { get; }
     public ModelDownloader ModelDownloader { get; }
 
@@ -155,6 +160,7 @@ public sealed partial class AppController : IDisposable
         }
 
         StartHookWatchdog();
+        StartReminderTimer();
         CreateTray();
         Log.Info("Tray created");
         PreloadTranscriber();
@@ -407,7 +413,8 @@ public sealed partial class AppController : IDisposable
         var session = new Session
         {
             Binding = binding,
-            Mode = ResolveMode(binding, target, settings, entry),
+            Mode = binding.Action == HotkeyAction.Continue ? ContinueMode(settings) : ResolveMode(binding, target, settings, entry),
+            IsContinue = binding.Action == HotkeyAction.Continue,
             IsNote = isNote,
             IsEdit = binding.Action == HotkeyAction.EditSelection || entry?.Kind == CycleKind.Edit,
             Context = FocusContextReader.CaptureAsync(TimeSpan.FromMilliseconds(600)),
@@ -588,6 +595,11 @@ public sealed partial class AppController : IDisposable
             }
             else
             {
+                if (s.IsContinue)
+                {
+                    await ContinueAsync(s, pipeline, path, context, live, transcript);
+                    return;
+                }
                 var allowKeywords = s.Binding.Action == HotkeyAction.Dictate;
                 var (replyTo, replyInClipboard) = await FindMailAsync(s, context);
                 var result = live
@@ -728,9 +740,20 @@ public sealed partial class AppController : IDisposable
 
         if (asNote)
         {
-            new NoteStore(s.Settings.Notes.Folder).Append(DateTime.Now, result.Final);
+            var reminder = s.Settings.Notes.Reminders ? ReminderParser.Parse(result.Final, DateTime.Now) : null;
+            var noteText = reminder is null ? result.Final : $"{result.Final} ⏰ {reminder.Due:dd.MM. HH:mm}";
+            new NoteStore(s.Settings.Notes.Folder).Append(DateTime.Now, noteText);
             if (s.Settings.Notes.CopyToClipboard) await ClipboardService.SetTextAsync(result.Final);
-            Toast.Show(Strings.Get("toast.note_saved"));
+            if (reminder is not null)
+            {
+                Reminders.Add(reminder.Due, result.Final);
+                Log.Info($"Reminder set for {reminder.Due:yyyy-MM-dd HH:mm}");
+                Toast.Show(Strings.Format("toast.note_reminder", reminder.Due.ToString("ddd dd.MM. HH:mm", System.Globalization.CultureInfo.CurrentCulture)));
+            }
+            else
+            {
+                Toast.Show(Strings.Get("toast.note_saved"));
+            }
             _library?.Refresh();
         }
         else
@@ -742,7 +765,7 @@ public sealed partial class AppController : IDisposable
             ReportOutcome(outcome, method);
             if (outcome == InsertOutcome.Inserted)
             {
-                _lastInsert = new LastInsert(target, result.Final, result.Verbatim, context?.TextBefore, DateTime.UtcNow, false);
+                _lastInsert = new LastInsert(target, result.Final, result.Verbatim, context?.TextBefore, DateTime.UtcNow, false, result.Mode.Id);
                 WatchCorrections(s, text);
             }
             else
@@ -1438,6 +1461,7 @@ public sealed partial class AppController : IDisposable
     public void Dispose()
     {
         _hookWatchdog?.Stop();
+        _reminderTimer?.Stop();
         _hook.Dispose();
         _recorder.Dispose();
         _localFallback?.Dispose();

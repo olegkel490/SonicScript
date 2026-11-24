@@ -25,6 +25,7 @@ Inspiriert von [Blitztext](https://github.com/cmagnussen/blitztext-app) (macOS) 
 | `Strg+Alt+.` | nächster Modus |
 | `Strg+Alt+-` | vorheriger Modus |
 | `Ctrl+Alt+L` | Notiz-Bibliothek ein/aus |
+| `Strg+Alt+#` | Diktat fortsetzen (KI-Modi glätten alles zusammen neu) |
 | `Strg+Alt+Z` | letztes Diktat rückgängig (1× wortgetreue Fassung, 2× entfernen) |
 | `Esc` | Aufnahme abbrechen |
 
@@ -86,6 +87,10 @@ Antwortentwürfe.
   - Standard ist Zwischenablage + Strg+V. Die vorherige Zwischenablage wird mit allen Formaten wiederhergestellt.
   - Ist die Zwischenablage gesperrt, wird getippt.
   - Hat das Fenster gewechselt oder ist ein Passwortfeld aktiv, landet der Text nur in der Zwischenablage.
+- **Erinnerungen aus Notizen:** „Notiz: morgen 9 Uhr Angebot an Müller“ oder „in 2 Stunden …“ – SonicScript meldet
+  sich zur Zeit (Erledigt / In 10 Min); verpasste kommen nach dem Start.
+- **Vorlagen für eigene Modi:** LinkedIn-Post, Protokoll, Ticket, Kundenantwort, Zusammenfassung, Stichpunkte,
+  Chat-Nachricht, Formell, Locker – unter Einstellungen → Modi → „Aus Vorlage …“.
 - **Blitznotizen:**
   - Ablage als `Ordner/2026/2026-11/2026-11-16.md`, eine Zeile pro Notiz: `- [ ] 09:14 Text`.
   - Bibliothek am Bildschirmrand angedockt. Klick kopiert die Notiz und markiert sie grün.

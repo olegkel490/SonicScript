@@ -43,6 +43,7 @@ public sealed partial class SettingsWindow : Window
         SetupLists();
         SetupStats();
         SetupDiagnose();
+        RenderReminders();
 
         Get<Button>("SaveButton").Click += (_, _) => Save();
         Get<Button>("CancelButton").Click += (_, _) => Close();
@@ -262,6 +263,17 @@ public sealed partial class SettingsWindow : Window
             }
         };
 
+        var templates = new MenuFlyout();
+        var german = Strings.Language == "de";
+        foreach (var t in ModeTemplates.All)
+        {
+            var template = t;
+            var item = new MenuItem { Header = $"{t.Symbol}  {(german ? t.NameDe : t.NameEn)}" };
+            item.Click += (_, _) => _s.Modes.Add(template.Create(german));
+            templates.Items.Add(item);
+        }
+        Get<Button>("AddTemplate").Flyout = templates;
+
         Get<Button>("AddMode").Click += (_, _) =>
         {
             _s.Modes.Add(new ModeDefinition { Kind = ModeKind.Custom, Name = Strings.Get("settings.modes.new_name"), Symbol = "✦" });
@@ -448,6 +460,32 @@ public sealed partial class SettingsWindow : Window
         }
     }
 
+    private void RenderReminders()
+    {
+        var panel = Get<StackPanel>("ReminderList");
+        panel.Children.Clear();
+        var pending = _app.Reminders.Pending();
+        if (pending.Count == 0) return;
+        panel.Children.Add(new TextBlock { Text = Strings.Get("settings.notes.reminders_pending"), FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        foreach (var r in pending)
+        {
+            var id = r.Id;
+            var remove = new Button { Content = "✕", Padding = new Avalonia.Thickness(6, 0) };
+            remove.Click += (_, _) => { _app.Reminders.Complete(id); RenderReminders(); };
+            panel.Children.Add(new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 8,
+                Children =
+                {
+                    remove,
+                    new TextBlock { Text = r.Due.ToString("ddd dd.MM. HH:mm", CultureInfo.CurrentCulture), Width = 120, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
+                    new TextBlock { Text = r.Text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 440, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
+                },
+            });
+        }
+    }
+
     // ── Diagnose ───────────────────────────────────────────────────────────────
 
     private void SetupDiagnose()
@@ -538,7 +576,7 @@ public sealed partial class SettingsWindow : Window
     private void Save()
     {
         var error = Get<TextBlock>("SaveError");
-        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit"), ["next"] = Strings.Get("settings.hotkey.next"), ["prev"] = Strings.Get("settings.hotkey.prev"), ["undo"] = Strings.Get("settings.hotkey.undo") };
+        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit"), ["next"] = Strings.Get("settings.hotkey.next"), ["prev"] = Strings.Get("settings.hotkey.prev"), ["undo"] = Strings.Get("settings.hotkey.undo"), ["continue"] = Strings.Get("settings.hotkey.continue") };
         foreach (var m in _s.Modes) names["mode:" + m.Id] = m.Name;
         var conflicts = HotkeyConflicts.Find(_s.BuildHotkeyBindings());
         var blocking = conflicts.Where(c => c.Kind != ConflictKind.ReservedBySystem).ToList();

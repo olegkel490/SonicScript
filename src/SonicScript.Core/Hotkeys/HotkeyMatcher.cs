@@ -22,6 +22,8 @@ public enum HotkeyAction
     NextMode,
     /// <summary>Vorherigen Modus wählen.</summary>
     PreviousMode,
+    /// <summary>An das letzte Diktat anhängen (im KI-Modus wird der ganze Text neu geglättet).</summary>
+    Continue,
     /// <summary>Letztes Diktat rückgängig: erst wortgetreue Fassung, dann ganz entfernen.</summary>
     Undo,
 }

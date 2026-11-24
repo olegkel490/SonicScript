@@ -93,6 +93,8 @@ public class UiTests
         var clicked = false;
         Toast.Show("Test", false, "OK", () => clicked = true, "Nein", null);
         Toast.Show("Fehler", isError: true);
+        var timedOut = false;
+        Toast.Show("Erinnerung", false, "Erledigt", null, "Später", null, TimeSpan.FromMilliseconds(1), () => timedOut = true);
         Dispatcher.UIThread.RunJobs();
         Assert.False(clicked);
     }
