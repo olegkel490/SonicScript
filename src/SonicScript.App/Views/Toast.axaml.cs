@@ -12,6 +12,7 @@ public sealed partial class Toast : Window
 {
     private static Toast? _current;
     private readonly DispatcherTimer _timer;
+    private bool _answered;
 
     public Toast()
     {
@@ -27,7 +28,13 @@ public sealed partial class Toast : Window
     public static void Show(string message, bool isError = false) => Show(message, isError, null, null, null, null);
 
     /// <summary>Meldung mit bis zu zwei Knöpfen (z. B. "Übernehmen" / "Ignorieren"); bleibt länger stehen.</summary>
-    public static void Show(string message, bool isError, string? primaryText, Action? primary, string? secondaryText, Action? secondary)
+    public static void Show(string message, bool isError, string? primaryText, Action? primary, string? secondaryText, Action? secondary) =>
+        Show(message, isError, primaryText, primary, secondaryText, secondary, null, null);
+
+    /// <param name="stay">Wie lange die Meldung stehen bleibt (Standard: 20 s mit Knöpfen).</param>
+    /// <param name="onTimeout">Aufgerufen, wenn sie ohne Knopfdruck verschwindet.</param>
+    public static void Show(string message, bool isError, string? primaryText, Action? primary, string? secondaryText, Action? secondary,
+        TimeSpan? stay, Action? onTimeout)
     {
         Dispatcher.UIThread.Post(() =>
         {
@@ -39,11 +46,11 @@ public sealed partial class Toast : Window
                 t.FindControl<StackPanel>("Actions")!.IsVisible = true;
                 var p = t.FindControl<Button>("Primary")!;
                 p.Content = primaryText;
-                p.Click += (_, _) => { t.Close(); primary?.Invoke(); };
+                p.Click += (_, _) => { t._answered = true; t.Close(); primary?.Invoke(); };
                 var s = t.FindControl<Button>("Secondary")!;
                 s.IsVisible = secondaryText is not null;
                 s.Content = secondaryText;
-                s.Click += (_, _) => { t.Close(); secondary?.Invoke(); };
+                s.Click += (_, _) => { t._answered = true; t.Close(); secondary?.Invoke(); };
             }
             if (isError)
             {
@@ -51,7 +58,8 @@ public sealed partial class Toast : Window
                 box.BorderBrush = new SolidColorBrush(Color.Parse("#E5484D"));
                 box.BorderThickness = new Thickness(0, 0, 0, 3); // roter Streifen unten
             }
-            t._timer.Interval = TimeSpan.FromSeconds(primaryText is not null ? 20 : isError ? 7 : 4);
+            t._timer.Interval = stay ?? TimeSpan.FromSeconds(primaryText is not null ? 20 : isError ? 7 : 4);
+            if (onTimeout is not null) t.Closed += (_, _) => { if (!t._answered) onTimeout(); };
             _current = t;
             t.Show();
             t._timer.Start();

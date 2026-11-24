@@ -92,6 +92,13 @@
             <c:HotkeyBox Width="220" HorizontalAlignment="Left" Combo="{Binding UndoHotkey}" />
             <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.undo_hint}" TextWrapping="Wrap" />
 
+            <TextBlock Classes="h2" Text="{l:Tr settings.hotkey.continue}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <c:HotkeyBox Width="220" Combo="{Binding ContinueHotkey}" />
+              <ComboBox Width="180" ItemsSource="{x:Static l:Choices.TriggerModes}" SelectedItem="{Binding ContinueTrigger}" ItemTemplate="{StaticResource EnumText}" />
+            </StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.hotkey.continue_hint}" TextWrapping="Wrap" />
+
             <CheckBox IsChecked="{Binding LivePreview}" Content="{l:Tr settings.live_preview}" Margin="0,8,0,0" />
             <TextBlock Classes="hint" Text="{l:Tr settings.live_preview_hint}" TextWrapping="Wrap" />
 
@@ -226,7 +233,10 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button x:Name="AddMode" Content="{l:Tr settings.modes.add}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="AddMode" Content="{l:Tr settings.modes.add}" />
+              <Button x:Name="AddTemplate" Content="{l:Tr settings.modes.from_template}" />
+            </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </TabItem>
@@ -286,6 +296,9 @@
             <ComboBox Width="220" ItemsSource="{Binding Modes}" SelectedValue="{Binding Notes.ModeId}"
                       SelectedValueBinding="{Binding Id}" DisplayMemberBinding="{Binding Name}" />
             <CheckBox IsChecked="{Binding Notes.CopyToClipboard}" Content="{l:Tr settings.notes.copy}" />
+            <CheckBox IsChecked="{Binding Notes.Reminders}" Content="{l:Tr settings.notes.reminders}" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.notes.reminders_hint}" TextWrapping="Wrap" />
+            <StackPanel x:Name="ReminderList" Spacing="4" Margin="0,6,0,0" />
             <TextBlock Classes="h2" Text="{l:Tr settings.notes.keywords}" />
             <TextBox Width="440" HorizontalAlignment="Left" Text="{Binding Notes.Keywords}" />
             <TextBlock Classes="h2" Text="{l:Tr settings.notes.library_hotkey}" />

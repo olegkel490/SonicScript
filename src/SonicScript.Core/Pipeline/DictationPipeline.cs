@@ -82,6 +82,10 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         return result with { UsedFallbackTranscriber = tr.Fallback };
     }
 
+    /// <summary>Nur erkennen (Stille kürzen, ggf. Ersatz-Erkennung). null = keine Sprache.</summary>
+    public Task<TranscriptionResult?> TranscribeFileAsync(string audioPath, AppSettings settings, CancellationToken ct) =>
+        TranscribeAsync(audioPath, settings, ct);
+
     /// <summary>Bereits erkannten Text (z. B. aus dem Verlauf) erneut durch einen Modus schicken.</summary>
     public Task<DictationResult> RewriteTextAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, CancellationToken ct) =>
         RewriteAsync(verbatim, language, mode, settings, new DictionaryApplier(settings.Dictionary), ct);

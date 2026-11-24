@@ -7,7 +7,7 @@ namespace SonicScript.Core.Settings;
 
 public sealed class AppSettings
 {
-    public const int CurrentSchema = 6;
+    public const int CurrentSchema = 7;
 
     /// <summary>Fehlt in alten Dateien → 1 (Migration in <see cref="Normalize"/>).</summary>
     public int SchemaVersion { get; set; } = 1;
@@ -34,6 +34,12 @@ public sealed class AppSettings
     /// <summary>Letztes Diktat zurücknehmen: 1. Druck wortgetreue Fassung statt KI-Text, 2. Druck ganz entfernen.</summary>
     public KeyCombo UndoHotkey { get; set; } = DefaultUndoHotkey;
     public static readonly KeyCombo DefaultUndoHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'Z');
+
+    /// <summary>Weitersprechen: an das letzte Diktat anhängen (KI-Modi glätten dann alles zusammen neu).</summary>
+    public KeyCombo ContinueHotkey { get; set; } = DefaultContinueHotkey;
+    public TriggerMode ContinueTrigger { get; set; } = TriggerMode.Hold;
+    /// <summary>Strg+Alt+# – liegt auf deutschen Tastaturen direkt neben den anderen SonicScript-Tasten.</summary>
+    public static readonly KeyCombo DefaultContinueHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, VirtualKeys.Oem2);
 
     /// <summary>Während der Aufnahme den bisher erkannten Text anzeigen (nur lokale Erkennung).</summary>
     public bool LivePreview { get; set; } = true;
@@ -125,6 +131,7 @@ public sealed class AppSettings
         if (SchemaVersion < 4) MigrateToSchema4();
         if (SchemaVersion < 5) MigrateToSchema5();
         if (SchemaVersion < 6) MigrateToSchema6();
+        if (SchemaVersion < 7) MigrateToSchema7();
         SchemaVersion = CurrentSchema;
     }
 
@@ -137,6 +144,13 @@ public sealed class AppSettings
     {
         var others = BuildHotkeyBindings().Where(b => b.Id != "undo").Select(b => b.Combo);
         if (others.Contains(UndoHotkey)) UndoHotkey = KeyCombo.None;
+    }
+
+    /// <summary>Schema 7: neue Fortsetzen-Taste nur, wenn sie noch frei ist.</summary>
+    private void MigrateToSchema7()
+    {
+        var others = BuildHotkeyBindings().Where(b => b.Id != "continue").Select(b => b.Combo);
+        if (others.Contains(ContinueHotkey)) ContinueHotkey = KeyCombo.None;
     }
 
     private void MigrateToSchema5()
@@ -213,6 +227,7 @@ public sealed class AppSettings
         yield return new HotkeyBinding("next", NextModeHotkey, TriggerMode.Toggle, HotkeyAction.NextMode);
         yield return new HotkeyBinding("prev", PrevModeHotkey, TriggerMode.Toggle, HotkeyAction.PreviousMode);
         yield return new HotkeyBinding("undo", UndoHotkey, TriggerMode.Toggle, HotkeyAction.Undo);
+        yield return new HotkeyBinding("continue", ContinueHotkey, ContinueTrigger, HotkeyAction.Continue);
     }
 
     public const string EditEntryId = "action:edit";
@@ -429,6 +444,9 @@ public sealed class NotesSettings
     public string ModeId { get; set; } = BuiltInModes.VerbatimId;
     public KeyCombo LibraryHotkey { get; set; } = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'L');
     public bool CopyToClipboard { get; set; } = true;
+
+    /// <summary>Zeitangaben in Notizen ("morgen 9 Uhr …") werden zu Erinnerungen.</summary>
+    public bool Reminders { get; set; } = true;
     public DockSide LibraryDock { get; set; } = DockSide.Right;
 }
 
