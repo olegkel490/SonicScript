@@ -29,7 +29,7 @@ namespace SonicScript.App.Services;
 /// <summary>
 /// Zentrale Steuerung: Tastenkürzel → Aufnahme → Pipeline → Einfügen/Notiz. Läuft auf dem UI-Thread.
 /// </summary>
-public sealed class AppController : IDisposable
+public sealed partial class AppController : IDisposable
 {
     public const string TranscriptionSecret = "transcription";
     public const string LanguageModelSecret = "languagemodel";
@@ -75,6 +75,7 @@ public sealed class AppController : IDisposable
     private Session? _processing;
     private DictationResult? _last;
     private LastInsert? _lastInsert;
+    private bool _micMissingShown;
     private LiveTranscription? _liveSink;
     private CancellationTokenSource? _correctionCts;
     private DateTime _costCheckedAt = DateTime.MinValue;
@@ -153,12 +154,19 @@ public sealed class AppController : IDisposable
             Toast.Show(Strings.Format("toast.hook_failed", ex.Message), isError: true);
         }
 
+        StartHookWatchdog();
         CreateTray();
         Log.Info("Tray created");
         PreloadTranscriber();
 
-        if (Program.AfterUpdate)
+        if (Program.RolledBack)
+            Toast.Show(Strings.Format("toast.rolled_back", CurrentVersion.ToString(3)), isError: true);
+        else if (Program.AfterUpdate)
             Toast.Show(Strings.Format("toast.updated", CurrentVersion.ToString(3)));
+        if (Program.AfterUpdate) _ = ConfirmUpdateHealthyAsync();
+        if (Program.MovedFrom is { } movedFrom) FinishMove(movedFrom);
+        else OfferMoveIfSynced();
+        try { Autostart.RefreshPath(); } catch (Exception ex) { Log.Error("Autostart path", ex); }
 
         if (!Settings.FirstRunCompleted)
         {
@@ -172,6 +180,44 @@ public sealed class AppController : IDisposable
 
         _ = UpdateLoopAsync();
     }
+
+    private DispatcherTimer? _hookWatchdog;
+
+    /// <summary>
+    /// Windows entfernt den Tastatur-Hook stillschweigend, wenn er einmal zu langsam war (z. B. nach dem Aufwachen
+    /// aus dem Ruhezustand). Dann reagieren die Tasten nicht mehr. Deshalb: nach Ruhezustand sowie nach längerer
+    /// Zeit ohne jedes Tastenereignis vorsorglich neu anmelden.
+    /// </summary>
+    private void StartHookWatchdog()
+    {
+        var last = DateTime.UtcNow;
+        _hookWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _hookWatchdog.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow;
+            var slept = now - last > TimeSpan.FromSeconds(90); // Takt lange ausgefallen → Rechner hat geschlafen
+            last = now;
+            var quiet = Environment.TickCount64 - _hook.LastEventTicks > (long)TimeSpan.FromMinutes(20).TotalMilliseconds;
+            if (_recording is not null) return;
+            if (!_hook.IsInstalled || slept || quiet)
+            {
+                try
+                {
+                    _hook.Reinstall();
+                    Log.Info($"Keyboard hook reinstalled ({(slept ? "after sleep" : quiet ? "no key events for 20 min" : "was missing")})");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("Hook reinstall", ex);
+                }
+            }
+        };
+        _hookWatchdog.Start();
+    }
+
+    /// <summary>Für die Diagnose.</summary>
+    public (bool Installed, TimeSpan SinceLastKey) HookStatus =>
+        (_hook.IsInstalled, TimeSpan.FromMilliseconds(Environment.TickCount64 - _hook.LastEventTicks));
 
     private static void CleanupStaleRecordings()
     {
@@ -370,9 +416,28 @@ public sealed class AppController : IDisposable
             Settings = settings,
         };
 
+        var device = AudioRecorder.Resolve(settings.Transcription.MicrophoneDevice, settings.Transcription.MicrophoneName);
+        if (device < 0 && !string.IsNullOrWhiteSpace(settings.Transcription.MicrophoneName) && !_micMissingShown)
+        {
+            _micMissingShown = true;
+            Toast.Show(Strings.Format("toast.mic_missing", settings.Transcription.MicrophoneName));
+        }
         try
         {
-            _recorder.Start(session.AudioPath, settings.Transcription.MicrophoneDevice);
+            _recorder.Start(session.AudioPath, device);
+        }
+        catch (Exception ex) when (device >= 0)
+        {
+            // Gewähltes Gerät klemmt (gerade abgezogen o. Ä.) → Windows-Standardmikrofon.
+            Log.Error("Recorder (device " + device + "), retry with default", ex);
+            try { _recorder.Start(session.AudioPath, -1); }
+            catch (Exception ex2)
+            {
+                Log.Error("Recorder", ex2);
+                _hook.Matcher?.EndSession();
+                Toast.Show(Strings.Format("toast.mic_failed", ex2.Message), isError: true);
+                return;
+            }
         }
         catch (Exception ex)
         {
@@ -492,6 +557,11 @@ public sealed class AppController : IDisposable
             return;
         }
 
+        if (_recorder.LastError is { } micError)
+        {
+            Log.Error("Microphone lost during recording", micError);
+            Toast.Show(Strings.Get("toast.mic_lost"), isError: true);
+        }
         s.AudioDuration = path is null ? TimeSpan.Zero : WavFile.GetDuration(path) ?? TimeSpan.Zero;
         if (path is null || s.AudioDuration < MinRecording)
         {
@@ -509,7 +579,7 @@ public sealed class AppController : IDisposable
         try
         {
             var transcriber = EnsureTranscriber() ?? throw new InvalidOperationException("no_transcriber");
-            var pipeline = new DictationPipeline(transcriber, CreateChatClient(s.Settings));
+            var pipeline = CreatePipeline(transcriber, s.Settings);
             var context = await s.Context;
             var (live, transcript) = await FinishLiveAsync(s);
             if (s.IsEdit)
@@ -734,6 +804,61 @@ public sealed class AppController : IDisposable
         }
     }
 
+    /// <summary>Zuletzt eingefügten Text durch <paramref name="text"/> ersetzen (sonst in die Zwischenablage).</summary>
+    private async Task ReplaceLastInsertAsync(string text)
+    {
+        var li = _lastInsert;
+        if (li is not null && DateTime.UtcNow - li.At < UndoWindow && ForegroundWindow.Current == li.Target.Handle &&
+            await TextInserter.UndoAsync(li.Target))
+        {
+            await Task.Delay(120);
+            var s = Settings;
+            var fitted = s.Insertion.FitToContext ? InsertionFitter.Fit(text, li.Before) : text;
+            var outcome = await _inserter.InsertAsync(fitted, InsertionMethod.Paste, li.Target, s.Insertion);
+            ReportOutcome(outcome, InsertionMethod.Paste);
+            _lastInsert = outcome == InsertOutcome.Inserted ? li with { Final = text, VerbatimShown = false, At = DateTime.UtcNow } : null;
+            return;
+        }
+        await ClipboardService.SetTextAsync(text);
+        Toast.Show(Strings.Get("toast.copied"));
+    }
+
+    /// <summary>Text aus dem Verlauf erneut durch einen Modus schicken; Ergebnis in die Zwischenablage.</summary>
+    public async Task ReprocessAsync(HistoryEntry entry, ModeDefinition mode)
+    {
+        var s = Settings;
+        var transcriber = EnsureTranscriber();
+        if (transcriber is null && mode.NeedsLanguageModel is false) { await ClipboardService.SetTextAsync(entry.Verbatim); return; }
+        SetTrayState("busy");
+        try
+        {
+            var pipeline = new DictationPipeline(transcriber ?? new NoTranscriber(), CreateChatClient(s), CreateChatClient(s, fallback: true));
+            var result = await Task.Run(() => pipeline.RewriteTextAsync(entry.Verbatim, null, mode, s, CancellationToken.None));
+            await ClipboardService.SetTextAsync(result.Final);
+            _last = result;
+            if (s.History.Enabled)
+                History.Add(new HistoryEntry(DateTimeOffset.Now, mode.Id, result.Verbatim, result.Final, entry.App), s.History.MaxEntries, s.History.MaxAgeDays);
+            if (result.Warning == DictationWarning.None) Toast.Show(Strings.Format("toast.reprocessed", mode.Name));
+            else ShowWarning(result);
+            RebuildTrayMenu();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Reprocess", ex);
+            Toast.Show(Strings.Format("setup.error", Short(ex.Message)), isError: true);
+        }
+        finally
+        {
+            SetTrayState("idle");
+        }
+    }
+
+    private sealed class NoTranscriber : ITranscriber
+    {
+        public Task<TranscriptionResult> TranscribeAsync(TranscriptionRequest request, CancellationToken ct) =>
+            throw new InvalidOperationException("no_transcriber");
+    }
+
     // ── Wörterbuch lernt mit ───────────────────────────────────────────────────
 
     private void WatchCorrections(Session s, string inserted)
@@ -845,12 +970,23 @@ public sealed class AppController : IDisposable
         }
     }
 
-    private static void ShowWarning(DictationResult result)
+    private void ShowWarning(DictationResult result)
     {
+        if (result.UsedFallbackTranscriber)
+        {
+            Log.Info("Cloud transcription failed, used local fallback");
+            Toast.Show(Strings.Get("toast.fallback_transcriber"));
+        }
+        if (result.UsedFallbackModel) Log.Info("Language model failed, used fallback model");
         switch (result.Warning)
         {
             case DictationWarning.ModeFailed:
                 Toast.Show(Strings.Format("toast.mode_failed", Short(result.WarningDetail)), isError: true);
+                break;
+            case DictationWarning.ModeRejected when result.RejectedText is { } aiText:
+                // Verdächtige, aber vorhandene KI-Antwort: wortgetreu ist eingefügt, KI-Text auf Wunsch.
+                Toast.Show(Strings.Format("toast.mode_rejected_choice", Strings.Get("reject." + (result.WarningDetail ?? "Empty"))), true,
+                    Strings.Get("toast.use_ai_text"), () => _ = ReplaceLastInsertAsync(aiText), null, null);
                 break;
             case DictationWarning.ModeRejected:
                 Toast.Show(Strings.Format("toast.mode_rejected", Strings.Get("reject." + (result.WarningDetail ?? "Empty"))), isError: true);
@@ -941,9 +1077,38 @@ public sealed class AppController : IDisposable
         }
     }
 
-    public IChatClient? CreateChatClient(AppSettings s)
+    /// <summary>Pipeline mit Absicherung: Ersatzmodell und – bei Cloud-Erkennung – lokale Ersatz-Erkennung.</summary>
+    public DictationPipeline CreatePipeline(ITranscriber transcriber, AppSettings s) =>
+        new(transcriber, CreateChatClient(s), CreateChatClient(s, fallback: true), LocalFallbackTranscriber(s));
+
+    private LocalWhisperTranscriber? _localFallback;
+    private string? _localFallbackKey;
+
+    /// <summary>Lokales Whisper als Ersatz, wenn die Cloud-Erkennung ausfällt (nur wenn ein Modell installiert ist).</summary>
+    private ITranscriber? LocalFallbackTranscriber(AppSettings s)
+    {
+        if (s.Transcription.Engine != TranscriptionEngine.Cloud || !s.Transcription.FallbackToLocal) return null;
+        var model = WhisperModelCatalog.Find(s.Transcription.LocalModelId);
+        if (model is null || !ModelDownloader.IsInstalled(model)) return null;
+        var key = $"{model.Id}|{s.Transcription.UseGpu}";
+        if (_localFallback is null || _localFallbackKey != key)
+        {
+            _localFallback?.Dispose();
+            _localFallback = new LocalWhisperTranscriber(ModelDownloader.PathFor(model), s.Transcription.UseGpu);
+            _localFallbackKey = key;
+        }
+        return _localFallback;
+    }
+
+    public IChatClient? CreateChatClient(AppSettings s, bool fallback = false)
     {
         var e = s.LanguageModel.Endpoint;
+        if (fallback)
+        {
+            var fm = s.LanguageModel.FallbackModel?.Trim();
+            if (string.IsNullOrEmpty(fm) || fm == e.Model?.Trim()) return null;
+            e = new EndpointSettings { Preset = e.Preset, BaseUrl = e.BaseUrl, Model = fm };
+        }
         if (string.IsNullOrWhiteSpace(e.BaseUrl) || string.IsNullOrWhiteSpace(e.Model)) return null;
         try
         {
@@ -1169,7 +1334,7 @@ public sealed class AppController : IDisposable
         {
             var s = Settings;
             var mode = s.FindMode(rec.ModeId) ?? s.DefaultMode;
-            var pipeline = new DictationPipeline(transcriber, CreateChatClient(s));
+            var pipeline = CreatePipeline(transcriber, s);
             var result = await Task.Run(() => pipeline.RunAsync(rec.AudioPath, mode, s, CancellationToken.None));
             await ClipboardService.SetTextAsync(result.Final);
             _last = result;
@@ -1234,12 +1399,12 @@ public sealed class AppController : IDisposable
         try
         {
             Toast.Show(Strings.Format("update.downloading", release.Tag));
-            var result = await new Updater(Http).InstallAsync(release, CancellationToken.None);
+            var updater = new Updater(Http);
+            var result = await updater.InstallAsync(release, CancellationToken.None);
             switch (result)
             {
                 case UpdateResult.Ready:
-                    ExitReason = "update to " + release.Tag;
-                    _lifetime.Shutdown();
+                    await SuperviseUpdateAsync(updater, release);
                     break;
                 case UpdateResult.NoWriteAccess:
                     Toast.Show(Strings.Get("update.no_write"), isError: true);
@@ -1272,8 +1437,10 @@ public sealed class AppController : IDisposable
 
     public void Dispose()
     {
+        _hookWatchdog?.Stop();
         _hook.Dispose();
         _recorder.Dispose();
+        _localFallback?.Dispose();
         (_transcriber as IDisposable)?.Dispose();
         _disposing = true;
         _tray?.Dispose();

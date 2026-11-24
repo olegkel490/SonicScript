@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Während der Aufnahme den bisher erkannten Text anzeigen (nur lokale Erkennung).</summary>
     public bool LivePreview { get; set; } = true;
 
+    /// <summary>Hinweis "aus OneDrive umziehen" nicht mehr zeigen.</summary>
+    public bool MoveOfferDismissed { get; set; }
+
     /// <summary>Monatliches Kostenlimit für OpenRouter in US-Dollar; 0 = keine Warnung.</summary>
     public double CostLimitMonthlyUsd { get; set; }
     /// <summary>Monat ("yyyy-MM"), für den schon gewarnt wurde.</summary>
@@ -306,6 +309,12 @@ public sealed class TranscriptionSettings
 
     public int MicrophoneDevice { get; set; } = -1; // -1 = Standardgerät
 
+    /// <summary>Name des gewählten Mikrofons – die Nummern verschieben sich beim An-/Abstecken von Geräten.</summary>
+    public string MicrophoneName { get; set; } = "";
+
+    /// <summary>Fällt die Cloud-Erkennung aus, lokal erkennen (wenn ein lokales Modell installiert ist).</summary>
+    public bool FallbackToLocal { get; set; } = true;
+
     public EndpointSettings Cloud { get; set; } = new()
     {
         Preset = ProviderPreset.OpenRouter,
@@ -322,6 +331,9 @@ public sealed class LanguageModelSettings
         BaseUrl = ProviderPresets.BaseUrl(ProviderPreset.Ollama),
         Model = "qwen3:4b",
     };
+
+    /// <summary>Ersatzmodell beim selben Anbieter, falls das Hauptmodell ausfällt (leer = keins).</summary>
+    public string FallbackModel { get; set; } = "";
 }
 
 public enum ProviderPreset

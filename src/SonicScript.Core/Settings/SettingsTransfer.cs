@@ -20,6 +20,7 @@ public static class SettingsTransfer
             t.Remove("microphoneDevice");
             t.Remove("localModelId");
             t.Remove("useGpu");
+            t.Remove("microphoneName");
         }
         var wrapper = new JsonObject
         {
@@ -66,6 +67,7 @@ public static class SettingsTransfer
         imported.Transcription.MicrophoneDevice = current.Transcription.MicrophoneDevice;
         imported.Transcription.LocalModelId = current.Transcription.LocalModelId;
         imported.Transcription.UseGpu = current.Transcription.UseGpu;
+        imported.Transcription.MicrophoneName = current.Transcription.MicrophoneName;
         if (string.IsNullOrWhiteSpace(imported.Notes.Folder) || !directoryExists(imported.Notes.Folder))
             imported.Notes.Folder = current.Notes.Folder;
         return imported;

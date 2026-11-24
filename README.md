@@ -62,6 +62,18 @@ Antwortentwürfe.
 - **Rückgängig:** `Strg+Alt+Z` ersetzt den KI-Text durch die wortgetreue Fassung, ein zweiter Druck entfernt das Diktat.
 - **Wörterbuch lernt mit:** Korrigierst du nach dem Einfügen ein falsch erkanntes Wort, schlägt SonicScript die
   Schreibweise fürs Wörterbuch vor.
+- **Ausfallsicher:**
+  - Antwortet das Sprachmodell nicht, wird einmal wiederholt und dann ein **Ersatzmodell** gefragt (einstellbar).
+  - Fällt die Cloud-Erkennung aus, erkennt das **lokale Whisper-Modell** (falls installiert).
+  - Wirkt eine KI-Antwort verdächtig, wird wortgetreu eingefügt – ein Klick setzt den KI-Text trotzdem ein.
+  - Jeder Text im Verlauf lässt sich **neu verarbeiten** (anderer Modus, Ergebnis in der Zwischenablage).
+  - Der Tastatur-Hook wird nach dem Ruhezustand automatisch neu angemeldet; Mikrofone werden über den Namen
+    gefunden, beim Abziehen wird das bisher Aufgenommene verarbeitet.
+  - Startet ein Update nicht sauber, kehrt SonicScript automatisch zur vorherigen Version zurück.
+  - Abstürze werden erkannt, ins Log geschrieben, und Windows startet SonicScript neu.
+- **Diagnose:** Einstellungen → Diagnose prüft Mikrofon, Tasten, Erkennung, Sprachmodell, Guthaben und Updates und
+  speichert auf Wunsch einen Fehlerbericht (Log + Einstellungen ohne API-Schlüssel). Liegt die .exe in OneDrive,
+  zieht ein Klick sie nach `%LOCALAPPDATA%\Programs\SonicScript` um (mit Verknüpfungen).
 - **Statistik und Kosten:** Diktate, Wörter, Sprechzeit und gesparte Tippzeit pro Tag/Woche/Monat; bei OpenRouter
   der Verbrauch (Tag/Woche/Monat) mit optionaler Warnung ab einem Monatslimit.
 - **KI-Modi:**

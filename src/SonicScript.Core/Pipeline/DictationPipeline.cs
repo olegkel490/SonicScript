@@ -34,6 +34,15 @@ public sealed record DictationResult(
 
     /// <summary>Erkanntes Stichwort, falls der Modus per Sprachbefehl gewählt wurde.</summary>
     public string? Keyword { get; init; }
+
+    /// <summary>Verworfene KI-Antwort (zum Nachträglich-Einfügen anbieten).</summary>
+    public string? RejectedText { get; init; }
+
+    /// <summary>Cloud-Erkennung fiel aus, lokal erkannt.</summary>
+    public bool UsedFallbackTranscriber { get; init; }
+
+    /// <summary>Hauptmodell fiel aus, Ersatzmodell hat geantwortet.</summary>
+    public bool UsedFallbackModel { get; init; }
 }
 
 /// <summary>Transkription fehlgeschlagen. Die Aufnahme sollte aufbewahrt werden.</summary>
@@ -43,7 +52,9 @@ public sealed class TranscriptionFailedException(string message, Exception inner
 /// Audio → Transkript → Filter (Halluzinationen, Uhrzeiten, Wörterbuch) → optional KI-Modus → Ergebnis.
 /// Scheitert nur der KI-Schritt, kommt der wortgetreue Text mit Warnung zurück (nichts geht verloren).
 /// </summary>
-public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? chat)
+/// <param name="fallbackChat">Ersatzmodell, wenn das Hauptmodell (nach einer Wiederholung) scheitert oder verworfen wird.</param>
+/// <param name="fallbackTranscriber">Ersatz-Erkennung (z. B. lokal), wenn die Erkennung fehlschlägt.</param>
+public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? chat, IChatClient? fallbackChat = null, ITranscriber? fallbackTranscriber = null)
 {
     /// <param name="allowKeywords">Sprachbefehle am Anfang auswerten (nur beim normalen Diktat).</param>
     public async Task<DictationResult> RunAsync(string audioPath, ModeDefinition mode, AppSettings settings, CancellationToken ct, bool allowKeywords = false, string? replyTo = null)
@@ -65,10 +76,66 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         if (allowKeywords && settings.VoiceKeywords && ModeKeywords.Detect(verbatim, settings) is { } kw)
         {
             var r = await RewriteAsync(kw.Rest, language, kw.Mode, settings, dictionary, ct, replyTo).ConfigureAwait(false);
-            return r with { SaveAsNote = kw.IsNote, Keyword = kw.Keyword };
+            return r with { SaveAsNote = kw.IsNote, Keyword = kw.Keyword, UsedFallbackTranscriber = tr.Fallback };
         }
-        return await RewriteAsync(verbatim, language, mode, settings, dictionary, ct, replyTo).ConfigureAwait(false);
+        var result = await RewriteAsync(verbatim, language, mode, settings, dictionary, ct, replyTo).ConfigureAwait(false);
+        return result with { UsedFallbackTranscriber = tr.Fallback };
     }
+
+    /// <summary>Bereits erkannten Text (z. B. aus dem Verlauf) erneut durch einen Modus schicken.</summary>
+    public Task<DictationResult> RewriteTextAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, CancellationToken ct) =>
+        RewriteAsync(verbatim, language, mode, settings, new DictionaryApplier(settings.Dictionary), ct);
+
+    private sealed record Attempt(string? Cleaned, string? Error, RewriteVerdict Verdict, bool ByFallback);
+
+    /// <summary>
+    /// Sprachmodell fragen, mit Absicherung: Bei vorübergehenden Fehlern (Zeitüberschreitung, Serverfehler, leer)
+    /// einmal wiederholen; scheitert es dann noch oder wird die Antwort verworfen, das Ersatzmodell fragen.
+    /// </summary>
+    private async Task<Attempt> CompleteGuardedAsync(string system, string user, double temperature, string input, ModeKind kind, CancellationToken ct)
+    {
+        async Task<Attempt> Try(IChatClient client, bool byFallback)
+        {
+            try
+            {
+                var raw = await client.CompleteAsync(system, user, temperature, ct).ConfigureAwait(false);
+                var cleaned = RewriteGuard.Clean(raw);
+                return new Attempt(cleaned, null, RewriteGuard.Check(input, cleaned, kind), byFallback);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is RemoteServiceException or HttpRequestException or InvalidOperationException or OperationCanceledException)
+            {
+                return new Attempt(null, ex.Message, RewriteVerdict.Ok, byFallback);
+            }
+        }
+
+        var a = await Try(chat!, false).ConfigureAwait(false);
+        if (a.Error is null && a.Verdict == RewriteVerdict.Ok) return a;
+        if ((a.Error is not null && IsTransient(a.Error)) || a.Verdict == RewriteVerdict.Empty)
+        {
+            var again = await Try(chat!, false).ConfigureAwait(false);
+            if (again.Error is null && again.Verdict == RewriteVerdict.Ok) return again;
+            a = again;
+        }
+        if (fallbackChat is not null)
+        {
+            var fb = await Try(fallbackChat, true).ConfigureAwait(false);
+            if (fb.Error is null && fb.Verdict == RewriteVerdict.Ok) return fb;
+            // Ersatzmodell auch erfolglos: den aussagekräftigeren Grund melden (Antwort vor Fehler).
+            if (a.Error is not null && fb.Error is null) a = fb;
+        }
+        return a;
+    }
+
+    /// <summary>Fehler, bei denen eine Wiederholung Sinn ergibt.</summary>
+    public static bool IsTransient(string error) =>
+        error.StartsWith("timeout", StringComparison.Ordinal) || error.StartsWith("unreachable", StringComparison.Ordinal) ||
+        error.StartsWith("http_5", StringComparison.Ordinal) || error.StartsWith("http_429", StringComparison.Ordinal) ||
+        error.StartsWith("output_limit", StringComparison.Ordinal) || error.StartsWith("bad_response", StringComparison.Ordinal) ||
+        error.Contains("canceled", StringComparison.OrdinalIgnoreCase);
 
     private async Task<DictationResult> RewriteAsync(string verbatim, string? language, ModeDefinition mode, AppSettings settings, DictionaryApplier dictionary, CancellationToken ct, string? replyTo = null)
     {
@@ -78,31 +145,22 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         if (chat is null)
             return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.ModeNotConfigured, null);
 
-        string raw;
-        try
-        {
-            var reply = mode.Kind == ModeKind.Reply && !string.IsNullOrWhiteSpace(replyTo);
-            var system = reply
-                ? PromptBuilder.BuildReplySystemPrompt(mode, language, settings.Dictionary.Terms)
-                : PromptBuilder.BuildSystemPrompt(mode, language, settings.Dictionary.Terms);
-            var user = reply ? PromptBuilder.BuildReplyUserMessage(replyTo!, verbatim) : PromptBuilder.BuildUserMessage(verbatim);
-            raw = await chat.CompleteAsync(system, user, mode.Temperature, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is RemoteServiceException or HttpRequestException or InvalidOperationException)
-        {
-            return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.ModeFailed, ex.Message);
-        }
+        var reply = mode.Kind == ModeKind.Reply && !string.IsNullOrWhiteSpace(replyTo);
+        var system = reply
+            ? PromptBuilder.BuildReplySystemPrompt(mode, language, settings.Dictionary.Terms)
+            : PromptBuilder.BuildSystemPrompt(mode, language, settings.Dictionary.Terms);
+        var user = reply ? PromptBuilder.BuildReplyUserMessage(replyTo!, verbatim) : PromptBuilder.BuildUserMessage(verbatim);
+        var a = await CompleteGuardedAsync(system, user, mode.Temperature, verbatim, mode.Kind, ct).ConfigureAwait(false);
 
-        var cleaned = RewriteGuard.Clean(raw);
-        var verdict = RewriteGuard.Check(verbatim, cleaned, mode.Kind);
-        if (verdict != RewriteVerdict.Ok)
-            return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.ModeRejected, verdict.ToString());
+        if (a.Error is not null)
+            return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.ModeFailed, a.Error);
+        if (a.Verdict != RewriteVerdict.Ok)
+            return new DictationResult(verbatim, verbatim, language, mode, DictationWarning.ModeRejected, a.Verdict.ToString())
+            {
+                RejectedText = string.IsNullOrWhiteSpace(a.Cleaned) ? null : dictionary.Apply(a.Cleaned),
+            };
 
-        return new DictationResult(verbatim, dictionary.Apply(cleaned), language, mode, DictationWarning.None, null);
+        return new DictationResult(verbatim, dictionary.Apply(a.Cleaned!), language, mode, DictationWarning.None, null) { UsedFallbackModel = a.ByFallback };
     }
 
     /// <summary>
@@ -125,26 +183,14 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         if (instruction.Length == 0) return new DictationResult("", "", language, mode, DictationWarning.None, null);
         if (chat is null) return new DictationResult(instruction, "", language, mode, DictationWarning.ModeNotConfigured, null);
 
-        string raw;
-        try
-        {
-            raw = await chat.CompleteAsync(
-                PromptBuilder.BuildEditSystemPrompt(language, settings.Dictionary.Terms),
-                PromptBuilder.BuildEditUserMessage(selectedText, instruction), 0.3, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is RemoteServiceException or HttpRequestException or InvalidOperationException)
-        {
-            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeFailed, ex.Message);
-        }
-
-        var cleaned = RewriteGuard.Clean(raw);
-        if (RewriteGuard.Check(selectedText, cleaned, ModeKind.Custom) != RewriteVerdict.Ok)
-            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeRejected, null);
-        return new DictationResult(instruction, cleaned, language, mode, DictationWarning.None, null);
+        var a = await CompleteGuardedAsync(
+            PromptBuilder.BuildEditSystemPrompt(language, settings.Dictionary.Terms),
+            PromptBuilder.BuildEditUserMessage(selectedText, instruction), 0.3, selectedText, ModeKind.Custom, ct).ConfigureAwait(false);
+        if (a.Error is not null)
+            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeFailed, a.Error);
+        if (a.Verdict != RewriteVerdict.Ok)
+            return new DictationResult(instruction, "", language, mode, DictationWarning.ModeRejected, a.Verdict.ToString());
+        return new DictationResult(instruction, a.Cleaned!, language, mode, DictationWarning.None, null) { UsedFallbackModel = a.ByFallback };
     }
 
     /// <summary>
@@ -156,10 +202,11 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         var trim = settings.TrimSilence ? SilenceTrimmer.Trim(audioPath) : null;
         if (trim is { HasSpeech: false }) return null;
         var path = trim?.Path ?? audioPath;
+        var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
+        var request = new TranscriptionRequest(path, lang, BuildWhisperPrompt(settings.Dictionary.Terms));
         try
         {
-            var lang = settings.Transcription.Language == "auto" ? null : settings.Transcription.Language;
-            return await transcriber.TranscribeAsync(new TranscriptionRequest(path, lang, BuildWhisperPrompt(settings.Dictionary.Terms)), ct).ConfigureAwait(false);
+            return await transcriber.TranscribeAsync(request, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -167,7 +214,20 @@ public sealed class DictationPipeline(ITranscriber transcriber, IChatClient? cha
         }
         catch (Exception ex)
         {
-            throw new TranscriptionFailedException(ex.Message, ex);
+            if (fallbackTranscriber is null) throw new TranscriptionFailedException(ex.Message, ex);
+            try
+            {
+                var r = await fallbackTranscriber.TranscribeAsync(request, ct).ConfigureAwait(false);
+                return r with { Fallback = true };
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception)
+            {
+                throw new TranscriptionFailedException(ex.Message, ex); // ursprünglichen Fehler melden
+            }
         }
         finally
         {

@@ -148,6 +148,8 @@
             <TextBlock x:Name="BenchmarkResult" Classes="hint" />
             <CheckBox IsChecked="{Binding Transcription.UseGpu}" Content="{l:Tr settings.speech.gpu}" />
             <TextBlock Classes="hint" Text="{l:Tr common.restart_needed}" />
+            <CheckBox IsChecked="{Binding Transcription.FallbackToLocal}" Content="{l:Tr settings.speech.fallback_local}" Margin="0,12,0,0" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.speech.fallback_local_hint}" TextWrapping="Wrap" />
             <CheckBox IsChecked="{Binding TrimSilence}" Content="{l:Tr settings.speech.trim}" Margin="0,12,0,0" />
             <TextBlock Classes="hint" Text="{l:Tr settings.speech.trim_hint}" TextWrapping="Wrap" />
 
@@ -190,6 +192,11 @@
               <TextBox x:Name="LmKey" Grid.Row="3" Grid.Column="1" Margin="0,4" PasswordChar="•" />
             </Grid>
             <TextBlock x:Name="LmStatus" Classes="hint" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+              <TextBlock Text="{l:Tr settings.modes.fallback_model}" VerticalAlignment="Center" Width="160" />
+              <TextBox Width="260" Text="{Binding LanguageModel.FallbackModel}" Watermark="{l:Tr settings.modes.fallback_model_hint}" />
+            </StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.modes.fallback_hint}" TextWrapping="Wrap" />
 
             <TextBlock Classes="h2" Text="{l:Tr settings.modes.list}" />
             <ItemsControl x:Name="ModesList">
@@ -335,6 +342,25 @@
               <NumericUpDown Width="140" Minimum="0" Maximum="100000" Increment="1" FormatString="0.##" Value="{Binding CostLimitMonthlyUsd}" />
             </StackPanel>
             <TextBlock Classes="hint" Text="{l:Tr settings.cost.limit_hint}" TextWrapping="Wrap" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Diagnose -->
+      <TabItem x:Name="TabDiagnose" Header="{l:Tr settings.tab.diagnose}">
+        <ScrollViewer>
+          <StackPanel>
+            <TextBlock Classes="hint" Text="{l:Tr settings.diag.hint}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+              <Button x:Name="RunDiagnose" Content="{l:Tr settings.diag.run}" />
+              <Button x:Name="SaveReport" Content="{l:Tr settings.diag.report}" />
+            </StackPanel>
+            <StackPanel x:Name="DiagResults" Spacing="4" Margin="0,10,0,0" />
+            <TextBlock x:Name="ReportStatus" Classes="hint" TextWrapping="Wrap" />
+
+            <TextBlock Classes="h2" Text="{l:Tr settings.location}" />
+            <TextBlock x:Name="LocationInfo" TextWrapping="Wrap" />
+            <Button x:Name="MoveApp" Content="{l:Tr settings.location.move}" Margin="0,6,0,0" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>
