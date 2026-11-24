@@ -36,8 +36,29 @@ public sealed class KeyboardHook : IDisposable
         if (_hook == IntPtr.Zero) throw new InvalidOperationException("SetWindowsHookEx failed: " + Marshal.GetLastWin32Error());
     }
 
+    /// <summary>Zeitpunkt (Environment.TickCount64) des letzten Tastenereignisses, das der Hook gesehen hat.</summary>
+    public long LastEventTicks { get; private set; } = Environment.TickCount64;
+
+    public bool IsInstalled => _hook != IntPtr.Zero;
+
+    /// <summary>
+    /// Hook neu anmelden. Windows entfernt Low-Level-Hooks stillschweigend, wenn ein Aufruf zu lange dauert
+    /// (z. B. nach Ruhezustand oder unter Last) – danach reagieren die Tasten nicht mehr.
+    /// </summary>
+    public void Reinstall()
+    {
+        if (_hook != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_hook);
+            _hook = IntPtr.Zero;
+        }
+        Install();
+        LastEventTicks = Environment.TickCount64;
+    }
+
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
+        LastEventTicks = Environment.TickCount64;
         if (nCode >= 0 && !Suspended && Matcher is { } matcher)
         {
             try

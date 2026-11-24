@@ -17,6 +17,15 @@ public static class Autostart
         }
     }
 
+    /// <summary>Nach einem Umzug der .exe den Autostart-Eintrag auf den neuen Pfad setzen.</summary>
+    public static void RefreshPath()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+        if (key?.GetValue(ValueName) is string value && Environment.ProcessPath is { } exe &&
+            !value.Contains(exe, StringComparison.OrdinalIgnoreCase))
+            Set(true);
+    }
+
     public static void Set(bool enabled)
     {
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);

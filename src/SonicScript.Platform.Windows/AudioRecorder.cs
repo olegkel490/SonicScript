@@ -29,12 +29,35 @@ public sealed class AudioRecorder : IDisposable
         return list;
     }
 
+    /// <summary>
+    /// Gerätenummer zum gespeicherten Namen suchen (Nummern verschieben sich beim An-/Abstecken).
+    /// Nicht gefunden → Windows-Standardgerät (-1).
+    /// </summary>
+    public static int Resolve(int index, string? name)
+    {
+        try
+        {
+            var mics = Microphones();
+            if (!string.IsNullOrWhiteSpace(name))
+                return mics.FirstOrDefault(m => string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))?.Index ?? -1;
+            return index >= 0 && index < mics.Count ? index : -1;
+        }
+        catch (Exception)
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>Fehler, mit dem die letzte Aufnahme abbrach (z. B. Mikrofon abgezogen); das Aufgenommene bleibt.</summary>
+    public Exception? LastError { get; private set; }
+
     public void Start(string path, int deviceIndex)
     {
         if (_waveIn is not null) throw new InvalidOperationException("already_recording");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         _path = path;
         _discard = false;
+        LastError = null;
         _stopped = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var waveIn = new WaveInEvent
         {
@@ -107,12 +130,15 @@ public sealed class AudioRecorder : IDisposable
             _waveIn = null;
         }
         var path = _path;
-        if (_discard || e.Exception is not null)
+        LastError = e.Exception;
+        // Gerät weg (abgezogen, Treiber neu gestartet): Bis dahin Aufgenommenes trotzdem verarbeiten.
+        var hasAudio = path is not null && File.Exists(path) && new FileInfo(path).Length > 44 + 16000;
+        if (_discard || (e.Exception is not null && !hasAudio))
         {
             if (path is not null) TryDelete(path);
             path = null;
         }
-        if (e.Exception is not null) _stopped?.TrySetException(e.Exception);
+        if (e.Exception is not null && path is null) _stopped?.TrySetException(e.Exception);
         else _stopped?.TrySetResult(path);
     }
 

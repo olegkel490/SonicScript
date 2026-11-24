@@ -20,6 +20,13 @@ public enum UpdateResult
 public sealed class Updater(HttpClient http)
 {
     public const string AfterUpdateArg = "--after-update";
+    public const string RolledBackArg = "--rolled-back";
+    /// <summary>Die neue Version setzt dieses Ereignis, sobald sie stabil läuft.</summary>
+    public const string HealthyEventName = @"Local\SonicScript.UpdateHealthy";
+
+    /// <summary>Nach <see cref="UpdateResult.Ready"/>: die gestartete neue Version und ihr Gesundheits-Signal.</summary>
+    public Process? Started { get; private set; }
+    public EventWaitHandle? Healthy { get; private set; }
 
     public async Task<UpdateResult> InstallAsync(ReleaseInfo release, CancellationToken ct)
     {
@@ -67,9 +74,53 @@ public sealed class Updater(HttpClient http)
             throw;
         }
 
-        Process.Start(new ProcessStartInfo(exe, AfterUpdateArg) { UseShellExecute = false, WorkingDirectory = dir });
+        Healthy = new EventWaitHandle(false, EventResetMode.ManualReset, HealthyEventName);
+        Started = Process.Start(new ProcessStartInfo(exe, AfterUpdateArg) { UseShellExecute = false, WorkingDirectory = dir });
         Log.Info($"Update auf {release.Tag} installiert, Neustart");
         return UpdateResult.Ready;
+    }
+
+    /// <summary>Neue Version läuft stabil: der wartenden alten Instanz Bescheid geben.</summary>
+    public static void SignalHealthy()
+    {
+        if (EventWaitHandle.TryOpenExisting(HealthyEventName, out var ev))
+        {
+            using (ev) ev.Set();
+        }
+    }
+
+    /// <summary>
+    /// Neue Version ist abgestürzt oder hängt: sie beenden, alte Version zurück an ihren Platz und starten.
+    /// Läuft in der alten Instanz (deren Datei heißt gerade *.old).
+    /// </summary>
+    public static bool RollBack(Process? started)
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is null) return false;
+        var oldPath = exe + ".old";
+        try
+        {
+            if (started is { HasExited: false })
+            {
+                started.Kill();
+                started.WaitForExit(5000);
+            }
+        }
+        catch (Exception) { }
+        for (var i = 0; i < 20; i++)
+        {
+            try
+            {
+                if (!File.Exists(oldPath)) return false;
+                if (File.Exists(exe)) File.Move(exe, exe + ".bad", overwrite: true);
+                File.Move(oldPath, exe);
+                Process.Start(new ProcessStartInfo(exe, $"{AfterUpdateArg} {RolledBackArg}") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe)! });
+                return true;
+            }
+            catch (IOException) { Thread.Sleep(250); }
+            catch (UnauthorizedAccessException) { Thread.Sleep(250); }
+        }
+        return false;
     }
 
     /// <summary>Beim Start nach einem Update: Reste der alten Version entfernen.</summary>
@@ -77,7 +128,7 @@ public sealed class Updater(HttpClient http)
     {
         var exe = Environment.ProcessPath;
         if (exe is null) return;
-        foreach (var leftover in new[] { exe + ".old", exe + ".new" })
+        foreach (var leftover in new[] { exe + ".old", exe + ".new", exe + ".bad" })
         {
             for (var i = 0; i < 20 && File.Exists(leftover); i++)
             {

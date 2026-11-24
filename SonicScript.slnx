@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SonicScript.Core.Tests/SonicScript.Core.Tests.csproj" />
+    <Project Path="tests/SonicScript.App.Tests/SonicScript.App.Tests.csproj" />
   </Folder>
 </Solution>

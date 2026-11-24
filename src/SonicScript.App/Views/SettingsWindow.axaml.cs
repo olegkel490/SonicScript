@@ -42,6 +42,7 @@ public sealed partial class SettingsWindow : Window
         SetupModes();
         SetupLists();
         SetupStats();
+        SetupDiagnose();
 
         Get<Button>("SaveButton").Click += (_, _) => Save();
         Get<Button>("CancelButton").Click += (_, _) => Close();
@@ -124,8 +125,15 @@ public sealed partial class SettingsWindow : Window
         var mics = new List<(int Index, string Name)> { (-1, Strings.Get("settings.microphone.default")) };
         try { mics.AddRange(AudioRecorder.Microphones().Select(m => (m.Index, m.Name))); }
         catch (Exception ex) { Log.Error("Microphones", ex); }
-        FillCombo(Get<ComboBox>("Microphone"), mics, m => m.Name, mics.FirstOrDefault(m => m.Index == _s.Transcription.MicrophoneDevice),
-            m => _s.Transcription.MicrophoneDevice = m.Index);
+        var name = _s.Transcription.MicrophoneName;
+        var current = !string.IsNullOrWhiteSpace(name)
+            ? mics.FirstOrDefault(m => m.Index >= 0 && string.Equals(m.Name, name, StringComparison.OrdinalIgnoreCase))
+            : mics.FirstOrDefault(m => m.Index == _s.Transcription.MicrophoneDevice);
+        FillCombo(Get<ComboBox>("Microphone"), mics, m => m.Name, current == default ? mics[0] : current, m =>
+        {
+            _s.Transcription.MicrophoneDevice = m.Index;
+            _s.Transcription.MicrophoneName = m.Index < 0 ? "" : m.Name;
+        });
     }
 
     // ── Spracherkennung ────────────────────────────────────────────────────────
@@ -320,6 +328,18 @@ public sealed partial class SettingsWindow : Window
             var final = e.Final;
             copy.Click += async (_, _) => { await ClipboardService.SetTextAsync(final); Toast.Show(Strings.Get("toast.copied")); };
             buttons.Children.Add(copy);
+            var reprocess = new Button { Content = Strings.Get("settings.history.reprocess"), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+            var menu = new MenuFlyout();
+            var entry = e;
+            foreach (var m in _s.Modes)
+            {
+                var mode = m;
+                var item = new MenuItem { Header = $"{m.Symbol}  {m.Name}" };
+                item.Click += async (_, _) => await _app.ReprocessAsync(entry, mode);
+                menu.Items.Add(item);
+            }
+            reprocess.Flyout = menu;
+            buttons.Children.Add(reprocess);
             if (e.Verbatim != e.Final && e.Verbatim.Length > 0)
             {
                 var verbatim = new Button { Content = Strings.Get("settings.history.copy_verbatim"), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
@@ -425,6 +445,91 @@ public sealed partial class SettingsWindow : Window
         {
             Log.Error("OpenRouter usage", ex);
             info.Text = Strings.Format("settings.transfer.failed", ex.Message);
+        }
+    }
+
+    // ── Diagnose ───────────────────────────────────────────────────────────────
+
+    private void SetupDiagnose()
+    {
+        Get<Button>("RunDiagnose").Click += async (_, _) => await RunDiagnoseAsync();
+        Get<Button>("SaveReport").Click += async (_, _) => await SaveReportAsync();
+        var location = AppLocation.Current;
+        Get<TextBlock>("LocationInfo").Text = location.IsSynced
+            ? Strings.Format("settings.location.synced", location.ExePath, AppLocation.RecommendedPath)
+            : Strings.Format("settings.location.ok", location.ExePath);
+        var move = Get<Button>("MoveApp");
+        move.IsVisible = location.CanMove;
+        move.Click += (_, _) => _app.MoveToRecommendedLocation();
+    }
+
+    private IReadOnlyList<DiagnosticResult> _lastDiagnostics = [];
+
+    private async Task RunDiagnoseAsync()
+    {
+        var panel = Get<StackPanel>("DiagResults");
+        var button = Get<Button>("RunDiagnose");
+        button.IsEnabled = false;
+        panel.Children.Clear();
+        panel.Children.Add(new TextBlock { Text = Strings.Get("settings.diag.running"), Classes = { "hint" } });
+        try
+        {
+            _lastDiagnostics = await _app.RunDiagnosticsAsync();
+            panel.Children.Clear();
+            foreach (var r in _lastDiagnostics)
+            {
+                var color = r.Status switch
+                {
+                    DiagnosticStatus.Ok => "#22A06B",
+                    DiagnosticStatus.Warning => "#D9A400",
+                    DiagnosticStatus.Error => "#E5484D",
+                    _ => "#888888",
+                };
+                var symbol = r.Status switch { DiagnosticStatus.Ok => "✓", DiagnosticStatus.Warning => "!", DiagnosticStatus.Error => "✕", _ => "–" };
+                panel.Children.Add(new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    Spacing = 8,
+                    Children =
+                    {
+                        new TextBlock { Text = symbol, Width = 16, FontWeight = Avalonia.Media.FontWeight.Bold, Foreground = Avalonia.Media.Brush.Parse(color) },
+                        new TextBlock { Text = r.Name, Width = 200, FontWeight = Avalonia.Media.FontWeight.SemiBold },
+                        new TextBlock { Text = r.Detail, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 420 },
+                    },
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Diagnostics", ex);
+            panel.Children.Clear();
+            panel.Children.Add(new TextBlock { Text = ex.Message });
+        }
+        finally
+        {
+            button.IsEnabled = true;
+        }
+    }
+
+    private async Task SaveReportAsync()
+    {
+        var status = Get<TextBlock>("ReportStatus");
+        try
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                SuggestedFileName = $"SonicScript-Fehlerbericht-{DateTime.Now:yyyy-MM-dd-HHmm}.zip",
+                DefaultExtension = "zip",
+                FileTypeChoices = [new FilePickerFileType("ZIP") { Patterns = ["*.zip"] }],
+            });
+            if (file?.TryGetLocalPath() is not { } path) return;
+            await _app.WriteSupportReportAsync(path, _lastDiagnostics);
+            status.Text = Strings.Format("settings.transfer.exported", path);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Support report", ex);
+            status.Text = Strings.Format("settings.transfer.failed", ex.Message);
         }
     }
 

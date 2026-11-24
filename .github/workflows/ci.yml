@@ -63,6 +63,9 @@ jobs:
       - name: Test
         run: dotnet test tests/SonicScript.Core.Tests -c Release --no-build --logger "trx;LogFileName=results.trx"
 
+      - name: UI tests (headless)
+        run: dotnet test tests/SonicScript.App.Tests -c Release --no-build --logger "trx;LogFileName=ui-results.trx"
+
       - name: Version
         id: version
         shell: bash
