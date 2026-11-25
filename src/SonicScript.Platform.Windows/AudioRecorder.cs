@@ -53,7 +53,8 @@ public sealed class AudioRecorder : IDisposable
 
     public void Start(string path, int deviceIndex)
     {
-        if (_waveIn is not null) throw new InvalidOperationException("already_recording");
+        // Alte Aufnahme hängt (Stopp-Meldung vom Treiber kam nie) → aufräumen statt für immer zu blockieren.
+        if (_waveIn is not null) ForceReset();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         _path = path;
         _discard = false;
@@ -84,12 +85,41 @@ public sealed class AudioRecorder : IDisposable
     }
 
     /// <summary>Stoppt und liefert den Pfad der fertigen WAV-Datei.</summary>
-    public Task<string?> StopAsync()
+    public async Task<string?> StopAsync()
     {
-        if (_waveIn is null || _stopped is null) return Task.FromResult<string?>(null);
-        _waveIn.StopRecording();
-        return _stopped.Task;
+        if (_waveIn is null || _stopped is null) return null;
+        var stopped = _stopped.Task;
+        try { _waveIn.StopRecording(); }
+        catch (Exception ex) { LastError = ex; }
+        // Manche Treiber melden das Ende nie (z. B. Headset gerade abgezogen) → nach 3 s selbst aufräumen.
+        if (await Task.WhenAny(stopped, Task.Delay(3000)).ConfigureAwait(false) != stopped)
+        {
+            LastError ??= new TimeoutException("recorder_stop_timeout");
+            var path = _path;
+            ForceReset();
+            return path is not null && !_discard && File.Exists(path) && new FileInfo(path).Length > 44 + 16000 ? path : null;
+        }
+        return await stopped.ConfigureAwait(false);
     }
+
+    /// <summary>Hängende Aufnahme hart beenden (Treiber antwortet nicht).</summary>
+    private void ForceReset()
+    {
+        ForcedResets++;
+        try { _writer?.Dispose(); } catch (Exception) { }
+        _writer = null;
+        if (_waveIn is { } w)
+        {
+            w.DataAvailable -= OnData;
+            w.RecordingStopped -= OnStopped;
+            try { w.Dispose(); } catch (Exception) { }
+        }
+        _waveIn = null;
+        _stopped?.TrySetResult(null);
+    }
+
+    /// <summary>Wie oft eine hängende Aufnahme hart beendet werden musste (fürs Log).</summary>
+    public int ForcedResets { get; private set; }
 
     /// <summary>Stoppt und verwirft die Aufnahme.</summary>
     public async Task CancelAsync()

@@ -28,6 +28,23 @@ public sealed class KeyboardHook : IDisposable
 
     public event Action<HotkeyEvent>? HotkeyTriggered;
 
+    /// <summary>Tasten galten als gedrückt, waren es aber nicht mehr (fürs Log).</summary>
+    public event Action<IReadOnlyList<int>>? KeysResynced;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vk);
+
+    public static bool IsPhysicallyDown(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+    /// <summary>Auch ohne Tastendruck abgleichen (z. B. per Timer); liefert ggf. ein Stopp-Ereignis.</summary>
+    public void Resync()
+    {
+        if (Matcher is not { } m) return;
+        var stop = m.ForgetReleasedKeys(IsPhysicallyDown);
+        if (m.LastForgotten.Count > 0) KeysResynced?.Invoke(m.LastForgotten);
+        if (stop is { } s) HotkeyTriggered?.Invoke(s);
+    }
+
     public void Install()
     {
         if (_hook != IntPtr.Zero) return;
@@ -72,6 +89,15 @@ public sealed class KeyboardHook : IDisposable
                     var up = msg is WM_KEYUP or WM_SYSKEYUP;
                     if (down || up)
                     {
+                        if (down)
+                        {
+                            // Hängengebliebene Tasten (Loslassen nie angekommen) abgleichen. Im Low-Level-Hook ist der
+                            // Zustand der gerade gemeldeten Taste noch der alte: bei Auto-Repeat "gedrückt", bei einem
+                            // neuen Druck nach verlorenem Loslassen "nicht gedrückt" – genau das soll vergessen werden.
+                            var stop = matcher.ForgetReleasedKeys(IsPhysicallyDown);
+                            if (matcher.LastForgotten.Count > 0) KeysResynced?.Invoke(matcher.LastForgotten);
+                            if (stop is { } s) HotkeyTriggered?.Invoke(s);
+                        }
                         var result = matcher.OnKey((int)info.vkCode, down);
                         if (result.InjectMenuMask)
                         {
