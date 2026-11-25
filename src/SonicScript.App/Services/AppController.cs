@@ -200,6 +200,7 @@ public sealed partial class AppController : IDisposable
         _hookWatchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _hookWatchdog.Tick += (_, _) =>
         {
+            RefreshMicrophonesIfChanged();
             var now = DateTime.UtcNow;
             var slept = now - last > TimeSpan.FromSeconds(90); // Takt lange ausgefallen → Rechner hat geschlafen
             last = now;
@@ -262,6 +263,9 @@ public sealed partial class AppController : IDisposable
                 break;
             case HotkeyEventKind.Undo:
                 _ = UndoLastAsync();
+                break;
+            case HotkeyEventKind.NextMicrophone:
+                NextMicrophone();
                 break;
         }
     }
@@ -1267,6 +1271,7 @@ public sealed partial class AppController : IDisposable
             modeMenu.Menu.Add(item);
         }
         menu.Add(modeMenu);
+        menu.Add(BuildMicrophoneMenu());
         menu.Add(new NativeMenuItemSeparator());
 
         var copyLast = new NativeMenuItem(Strings.Get("tray.copy_last")) { IsEnabled = _last is not null };

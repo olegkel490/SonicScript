@@ -22,6 +22,8 @@ public enum HotkeyAction
     NextMode,
     /// <summary>Vorherigen Modus wählen.</summary>
     PreviousMode,
+    /// <summary>Zum nächsten Mikrofon wechseln.</summary>
+    NextMicrophone,
     /// <summary>An das letzte Diktat anhängen (im KI-Modus wird der ganze Text neu geglättet).</summary>
     Continue,
     /// <summary>Letztes Diktat rückgängig: erst wortgetreue Fassung, dann ganz entfernen.</summary>
@@ -41,6 +43,7 @@ public enum HotkeyEventKind
     NextMode,
     PreviousMode,
     Undo,
+    NextMicrophone,
 }
 
 public readonly record struct HotkeyEvent(HotkeyEventKind Kind, HotkeyBinding? Binding);
@@ -172,6 +175,7 @@ public sealed class HotkeyMatcher
                 HotkeyAction.NextMode => HotkeyEventKind.NextMode,
                 HotkeyAction.PreviousMode => HotkeyEventKind.PreviousMode,
                 HotkeyAction.Undo => HotkeyEventKind.Undo,
+                HotkeyAction.NextMicrophone => HotkeyEventKind.NextMicrophone,
                 _ => HotkeyEventKind.ToggleLibrary,
             }, match);
         }
@@ -187,7 +191,7 @@ public sealed class HotkeyMatcher
     }
 
     /// <summary>Einmalige Befehle ohne Aufnahme-Sitzung.</summary>
-    private static bool IsCommand(HotkeyAction a) => a is HotkeyAction.ToggleLibrary or HotkeyAction.NextMode or HotkeyAction.PreviousMode or HotkeyAction.Undo;
+    private static bool IsCommand(HotkeyAction a) => a is HotkeyAction.ToggleLibrary or HotkeyAction.NextMode or HotkeyAction.PreviousMode or HotkeyAction.Undo or HotkeyAction.NextMicrophone;
 
     private KeyResult OnUp(int vk)
     {
