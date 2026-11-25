@@ -101,6 +101,37 @@ public sealed class HotkeyMatcher
         }
     }
 
+    /// <summary>
+    /// Tasten vergessen, deren Loslassen nie ankam – z. B. weil zwischendurch der Sperrbildschirm, Strg+Alt+Entf
+    /// oder eine Administrator-Abfrage (UAC) aktiv war; dort sieht ein Tastatur-Hook nichts. Ohne Abgleich gälte
+    /// Strg/Alt weiter als gedrückt bzw. eine Haupttaste würde als "Auto-Repeat" verschluckt ("Tasten hängen").
+    /// </summary>
+    /// <param name="isDown">Tatsächlicher Zustand einer Taste (GetAsyncKeyState).</param>
+    /// <param name="except">Taste, die nicht abgeglichen werden soll.</param>
+    /// <returns>Stopp-Ereignis, falls eine Halten-Aufnahme dadurch eigentlich schon beendet ist.</returns>
+    public HotkeyEvent? ForgetReleasedKeys(Func<int, bool> isDown, int except = -1)
+    {
+        List<int>? stale = null;
+        foreach (var k in _held)
+            if (k != except && !isDown(k)) (stale ??= []).Add(k);
+        if (stale is null) return null;
+        foreach (var k in stale)
+        {
+            _held.Remove(k);
+            _swallowedDowns.Remove(k);
+        }
+        LastForgotten = stale;
+        if (ActiveBinding is { Trigger: TriggerMode.Hold } active && stale.Any(k => IsPartOf(active.Combo, k)))
+        {
+            ActiveBinding = null;
+            return new HotkeyEvent(HotkeyEventKind.Stop, active);
+        }
+        return null;
+    }
+
+    /// <summary>Beim letzten Abgleich vergessene Tasten (fürs Log).</summary>
+    public IReadOnlyList<int> LastForgotten { get; private set; } = [];
+
     private bool NonModifierHeld(int except) => _held.Any(k => k != except && !VirtualKeys.IsModifier(k));
 
     public KeyResult OnKey(int vk, bool down) => down ? OnDown(vk) : OnUp(vk);

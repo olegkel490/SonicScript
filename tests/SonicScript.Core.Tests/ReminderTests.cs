@@ -106,3 +106,40 @@ public class ContinueAndTemplateTests
         }
     }
 }
+
+public class StaleKeyTests
+{
+    private const int LCtrl = VirtualKeys.LControl, LAlt = VirtualKeys.LMenu, Comma = VirtualKeys.OemComma;
+
+    [Fact]
+    public void LostKeyUpNoLongerSwallowsTheKey()
+    {
+        var m = new HotkeyMatcher(new Settings.AppSettings().BuildHotkeyBindings());
+        m.OnKey(LCtrl, true);
+        m.OnKey(LAlt, true);
+        Assert.True(m.OnKey(Comma, true).Swallow); // Diktat startet
+        // Sperrbildschirm: kein Loslassen kommt an. Danach ist physisch nichts gedrückt.
+        var stop = m.ForgetReleasedKeys(_ => false);
+        Assert.Equal(HotkeyEventKind.Stop, stop!.Value.Kind);
+        Assert.Contains(LCtrl, m.LastForgotten);
+        Assert.Null(m.ActiveBinding);
+
+        // Komma allein muss wieder normal durchgehen (vorher: als "Auto-Repeat" verschluckt).
+        var r = m.OnKey(Comma, true);
+        Assert.False(r.Swallow);
+        Assert.Null(r.Event);
+        Assert.Equal(KeyModifiers.None, m.CurrentModifiers);
+    }
+
+    [Fact]
+    public void KeysStillHeldAreKept()
+    {
+        var m = new HotkeyMatcher(new Settings.AppSettings().BuildHotkeyBindings());
+        m.OnKey(LCtrl, true);
+        m.OnKey(LAlt, true);
+        m.OnKey(Comma, true);
+        Assert.Null(m.ForgetReleasedKeys(_ => true));
+        Assert.Empty(m.LastForgotten);
+        Assert.NotNull(m.ActiveBinding);
+    }
+}

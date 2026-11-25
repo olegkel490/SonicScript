@@ -146,6 +146,7 @@ public sealed partial class AppController : IDisposable
         _recorder.Level += level => Dispatcher.UIThread.Post(() => _indicator.SetLevel(level));
         _recorder.Samples += samples => Volatile.Read(ref _liveSink)?.Append(samples);
         _hook.HotkeyTriggered += ev => Dispatcher.UIThread.Post(() => OnHotkey(ev));
+        _hook.KeysResynced += keys => Log.Info("Released stale keys (key-up never arrived): " + string.Join(", ", keys.Select(k => "0x" + k.ToString("X2"))));
         Controls.HotkeyCapture.ActiveChanged += active => _hook.Suspended = active;
         _hook.Matcher = new HotkeyMatcher(Settings.BuildHotkeyBindings());
         try
@@ -201,6 +202,7 @@ public sealed partial class AppController : IDisposable
         _hookWatchdog.Tick += (_, _) =>
         {
             RefreshMicrophonesIfChanged();
+            _hook.Resync();
             var now = DateTime.UtcNow;
             var slept = now - last > TimeSpan.FromSeconds(90); // Takt lange ausgefallen → Rechner hat geschlafen
             last = now;
@@ -535,6 +537,7 @@ public sealed partial class AppController : IDisposable
             _recording = null;
             _hook.Matcher?.EndSession();
             EndRecordingFeedback(rec, Cue.Cancel);
+            Log.Info("Recording cancelled");
             StopLiveSink(rec);
             rec.Live?.Dispose();
             await _recorder.CancelAsync();
@@ -576,6 +579,7 @@ public sealed partial class AppController : IDisposable
         s.AudioDuration = path is null ? TimeSpan.Zero : WavFile.GetDuration(path) ?? TimeSpan.Zero;
         if (path is null || s.AudioDuration < MinRecording)
         {
+            Log.Info($"Recording ended without usable audio ({s.AudioDuration.TotalMilliseconds:0} ms)");
             s.Live?.Dispose();
             TryDelete(path);
             ResetUi();
@@ -718,6 +722,7 @@ public sealed partial class AppController : IDisposable
     {
         if (result.IsEmpty)
         {
+            Log.Info($"Dictation done: {result.Mode.Id}, nothing heard, {s.AudioDuration.TotalSeconds:0.0} s audio");
             Toast.Show(Strings.Get("toast.nothing_heard"));
             return;
         }
