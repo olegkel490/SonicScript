@@ -115,6 +115,11 @@
 
             <TextBlock Classes="h2" Text="{l:Tr settings.microphone}" />
             <ComboBox x:Name="Microphone" MinWidth="320" />
+            <TextBlock Classes="hint" Text="{l:Tr settings.microphone_hint}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+              <TextBlock Text="{l:Tr settings.hotkey.microphone}" VerticalAlignment="Center" />
+              <c:HotkeyBox Width="220" Combo="{Binding MicrophoneHotkey}" />
+            </StackPanel>
 
             <TextBlock Classes="h2" Text="{l:Tr settings.insertion}" />
             <StackPanel Orientation="Horizontal" Spacing="8">

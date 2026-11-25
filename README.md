@@ -87,6 +87,7 @@ Antwortentwürfe.
   - Standard ist Zwischenablage + Strg+V. Die vorherige Zwischenablage wird mit allen Formaten wiederhergestellt.
   - Ist die Zwischenablage gesperrt, wird getippt.
   - Hat das Fenster gewechselt oder ist ein Passwortfeld aktiv, landet der Text nur in der Zwischenablage.
+- **Mikrofon schnell wechseln:** Tray-Menü → „Mikrofon“ oder eine frei belegbare Taste, die reihum wechselt.
 - **Erinnerungen aus Notizen:** „Notiz: morgen 9 Uhr Angebot an Müller“ oder „in 2 Stunden …“ – SonicScript meldet
   sich zur Zeit (Erledigt / In 10 Min); verpasste kommen nach dem Start.
 - **Vorlagen für eigene Modi:** LinkedIn-Post, Protokoll, Ticket, Kundenantwort, Zusammenfassung, Stichpunkte,

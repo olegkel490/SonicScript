@@ -35,6 +35,9 @@ public sealed class AppSettings
     public KeyCombo UndoHotkey { get; set; } = DefaultUndoHotkey;
     public static readonly KeyCombo DefaultUndoHotkey = new(KeyModifiers.Ctrl | KeyModifiers.Alt, 'Z');
 
+    /// <summary>Zum nächsten Mikrofon wechseln (Standard: keine Taste; schneller Wechsel auch im Tray-Menü).</summary>
+    public KeyCombo MicrophoneHotkey { get; set; } = KeyCombo.None;
+
     /// <summary>Weitersprechen: an das letzte Diktat anhängen (KI-Modi glätten dann alles zusammen neu).</summary>
     public KeyCombo ContinueHotkey { get; set; } = DefaultContinueHotkey;
     public TriggerMode ContinueTrigger { get; set; } = TriggerMode.Hold;
@@ -228,6 +231,7 @@ public sealed class AppSettings
         yield return new HotkeyBinding("prev", PrevModeHotkey, TriggerMode.Toggle, HotkeyAction.PreviousMode);
         yield return new HotkeyBinding("undo", UndoHotkey, TriggerMode.Toggle, HotkeyAction.Undo);
         yield return new HotkeyBinding("continue", ContinueHotkey, ContinueTrigger, HotkeyAction.Continue);
+        yield return new HotkeyBinding("mic", MicrophoneHotkey, TriggerMode.Toggle, HotkeyAction.NextMicrophone);
     }
 
     public const string EditEntryId = "action:edit";

@@ -576,7 +576,7 @@ public sealed partial class SettingsWindow : Window
     private void Save()
     {
         var error = Get<TextBlock>("SaveError");
-        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit"), ["next"] = Strings.Get("settings.hotkey.next"), ["prev"] = Strings.Get("settings.hotkey.prev"), ["undo"] = Strings.Get("settings.hotkey.undo"), ["continue"] = Strings.Get("settings.hotkey.continue") };
+        var names = new Dictionary<string, string> { ["dictate"] = Strings.Get("settings.hotkey.dictate"), ["note"] = Strings.Get("settings.notes.hotkey"), ["library"] = Strings.Get("settings.notes.library_hotkey"), ["edit"] = Strings.Get("settings.hotkey.edit"), ["next"] = Strings.Get("settings.hotkey.next"), ["prev"] = Strings.Get("settings.hotkey.prev"), ["undo"] = Strings.Get("settings.hotkey.undo"), ["continue"] = Strings.Get("settings.hotkey.continue"), ["mic"] = Strings.Get("settings.hotkey.microphone") };
         foreach (var m in _s.Modes) names["mode:" + m.Id] = m.Name;
         var conflicts = HotkeyConflicts.Find(_s.BuildHotkeyBindings());
         var blocking = conflicts.Where(c => c.Kind != ConflictKind.ReservedBySystem).ToList();
