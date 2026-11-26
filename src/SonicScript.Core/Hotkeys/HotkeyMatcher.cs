@@ -75,6 +75,13 @@ public sealed class HotkeyMatcher
     private readonly TimeProvider _time;
     private readonly HashSet<int> _held = [];
     private readonly HashSet<int> _swallowedDowns = [];
+    private readonly Dictionary<int, long> _lastDown = [];
+
+    /// <summary>
+    /// Länger als das ohne Auto-Repeat, obwohl die Taste als gedrückt gilt → ihr Loslassen ging verloren,
+    /// dies ist ein neuer Tastendruck (Windows wiederholt gehaltene Tasten spätestens nach ~1 s).
+    /// </summary>
+    public static readonly TimeSpan StaleRepeatGap = TimeSpan.FromMilliseconds(1500);
     private long _sessionStart;
     private bool _winConsumed;
 
@@ -113,7 +120,12 @@ public sealed class HotkeyMatcher
     {
         List<int>? stale = null;
         foreach (var k in _held)
-            if (k != except && !isDown(k)) (stale ??= []).Add(k);
+        {
+            // Verschluckte Tasten (z. B. das "," von Strg+Alt+,) aktualisieren den Windows-Tastenzustand nicht –
+            // für sie ist GetAsyncKeyState immer "nicht gedrückt". Sie werden über die Auto-Repeat-Pause erkannt.
+            if (k == except || _swallowedDowns.Contains(k)) continue;
+            if (!isDown(k)) (stale ??= []).Add(k);
+        }
         if (stale is null) return null;
         foreach (var k in stale)
         {
@@ -138,10 +150,25 @@ public sealed class HotkeyMatcher
 
     private KeyResult OnDown(int vk)
     {
+        var now = _time.GetTimestamp();
+        var last = _lastDown.TryGetValue(vk, out var t) ? t : (long?)null;
+        _lastDown[vk] = now;
         if (!_held.Add(vk))
         {
-            // Auto-Repeat: Haupttaste einer aktiven Belegung weiter verschlucken.
-            return new KeyResult(_swallowedDowns.Contains(vk), null, false);
+            var stale = last is { } l && _time.GetElapsedTime(l, now) > StaleRepeatGap;
+            if (!stale)
+            {
+                // Auto-Repeat: Haupttaste einer aktiven Belegung weiter verschlucken.
+                return new KeyResult(_swallowedDowns.Contains(vk), null, false);
+            }
+            // Loslassen ging verloren (Sperrbildschirm o. Ä.): wie Loslassen + neuer Druck behandeln.
+            _swallowedDowns.Remove(vk);
+            LastForgotten = [vk];
+            if (ActiveBinding is { Trigger: TriggerMode.Hold } hold && IsPartOf(hold.Combo, vk))
+            {
+                ActiveBinding = null;
+                return Swallowed(vk, new HotkeyEvent(HotkeyEventKind.Stop, hold));
+            }
         }
 
         var mods = CurrentModifiers;
