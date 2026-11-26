@@ -112,7 +112,7 @@ public class StaleKeyTests
     private const int LCtrl = VirtualKeys.LControl, LAlt = VirtualKeys.LMenu, Comma = VirtualKeys.OemComma;
 
     [Fact]
-    public void LostKeyUpNoLongerSwallowsTheKey()
+    public void LostModifierKeyUpStopsHoldRecording()
     {
         var m = new HotkeyMatcher(new Settings.AppSettings().BuildHotkeyBindings());
         m.OnKey(LCtrl, true);
@@ -123,12 +123,48 @@ public class StaleKeyTests
         Assert.Equal(HotkeyEventKind.Stop, stop!.Value.Kind);
         Assert.Contains(LCtrl, m.LastForgotten);
         Assert.Null(m.ActiveBinding);
+        Assert.Equal(KeyModifiers.None, m.CurrentModifiers);
+    }
 
-        // Komma allein muss wieder normal durchgehen (vorher: als "Auto-Repeat" verschluckt).
+    [Fact]
+    public void HeldSwallowedKeyIsNotForgottenDuringAutoRepeat()
+    {
+        // Regression 0.10.2: Das verschluckte "," gilt für Windows als nicht gedrückt – darf die Aufnahme nicht stoppen.
+        var time = new FakeTime(DateTimeOffset.UnixEpoch);
+        var m = new HotkeyMatcher(new Settings.AppSettings().BuildHotkeyBindings(), time: time);
+        var down = new HashSet<int> { LCtrl, LAlt }; // "," fehlt absichtlich (verschluckt)
+        m.OnKey(LCtrl, true);
+        m.OnKey(LAlt, true);
+        Assert.Equal(HotkeyEventKind.Start, m.OnKey(Comma, true).Event!.Value.Kind);
+        for (var i = 0; i < 40; i++)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(33));
+            Assert.Null(m.ForgetReleasedKeys(down.Contains));
+            var r = m.OnKey(Comma, true); // Auto-Repeat
+            Assert.True(r.Swallow);
+            Assert.Null(r.Event);
+        }
+        Assert.NotNull(m.ActiveBinding);
+        time.Advance(TimeSpan.FromMilliseconds(400));
+        Assert.Equal(HotkeyEventKind.Stop, m.OnKey(Comma, false).Event!.Value.Kind);
+    }
+
+    [Fact]
+    public void LostKeyUpOfSwallowedKeyIsDetectedByRepeatGap()
+    {
+        var time = new FakeTime(DateTimeOffset.UnixEpoch);
+        var m = new HotkeyMatcher(new Settings.AppSettings().BuildHotkeyBindings(), time: time);
+        m.OnKey(LCtrl, true);
+        m.OnKey(LAlt, true);
+        m.OnKey(Comma, true);
+        time.Advance(TimeSpan.FromSeconds(1));
+        // Loslassen aller Tasten geht verloren; Strg/Alt werden über den Tastenzustand abgeglichen.
+        Assert.Equal(HotkeyEventKind.Stop, m.ForgetReleasedKeys(_ => false)!.Value.Kind);
+        time.Advance(TimeSpan.FromSeconds(5));
+        // Später: "," allein → normal tippen, nicht verschlucken.
         var r = m.OnKey(Comma, true);
         Assert.False(r.Swallow);
         Assert.Null(r.Event);
-        Assert.Equal(KeyModifiers.None, m.CurrentModifiers);
     }
 
     [Fact]
